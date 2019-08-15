@@ -19,9 +19,10 @@ This is not guaranteed not to capture free variables.
 ```
 >> (\D F I. D (F I)) (\x. x x) (\f. f (f y)) (\x. x)
 y y
+>> (\T f x. T (T (T (T T))) f x) (\f x. f (f x)) (\x. x) y
+y
 >> \x. \y. y x
 \x. \y. y:0 x:1
->>
 ```
 
 ## Syntax
