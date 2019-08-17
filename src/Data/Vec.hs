@@ -1,28 +1,20 @@
-{-# LANGUAGE GADTs, TypeOperators, TypeSynonymInstances, FlexibleInstances #-}
-module Data.Vec (Vec (Empty, (:.)), (!.), elemIndexVec) where
+{-# LANGUAGE GADTs, TypeOperators, DataKinds #-}
+module Data.Vec (Vec (Empty, (:.)), (!.), elemIndex) where
 
-import Data.Fin (Fin (Zero, Succ))
-import Data.Type.Nat (Nat, Zero, Succ)
+import Data.Fin (Fin (FZ, FS))
+import Data.Nat (Nat (Z, S))
 
 data Vec n a where
-  Empty :: Vec Zero a
-  (:.)  :: Nat n => a -> Vec n a -> Vec (Succ n) a
+  Empty :: Vec 'Z a
+  (:.)  :: a -> Vec n a -> Vec ('S n) a
 
-instance Nat n => Functor (Vec n) where
-  fmap _ Empty     = Empty
-  fmap f (x :. xs) = f x :. fmap f xs
+(!.) :: Vec n a -> Fin n -> a
+(x :. _ ) !. FZ     = x
+(_ :. xs) !. (FS n) = xs !. n
+_         !. _      = error "Impossible"
 
-instance Nat n => Foldable (Vec n) where
-  foldr _ base Empty     = base
-  foldr f base (x :. xs) = x `f` foldr f base xs
-
-(!.) :: Nat n => Vec n a -> Fin n -> a
-(x :. _ ) !. Zero     = x
-(_ :. xs) !. (Succ n) = xs !. n
-_         !. _        = error "Impossible"
-
-elemIndexVec :: (Eq a, Nat n) => a -> Vec n a -> Maybe (Fin n)
-elemIndexVec _ Empty = Nothing
-elemIndexVec x (x' :. xs)
-  | x == x'   = Just Zero
-  | otherwise = Succ <$> elemIndexVec x xs
+elemIndex :: Eq a => a -> Vec n a -> Maybe (Fin n)
+elemIndex _ Empty = Nothing
+elemIndex x (x' :. xs)
+  | x == x'   = Just FZ
+  | otherwise = FS <$> elemIndex x xs

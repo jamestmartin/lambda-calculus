@@ -1,10 +1,10 @@
+{-# LANGUAGE BlockArguments, LambdaCase #-}
 module Main where
 
 import Control.Monad (forever)
 import System.IO (hFlush, stdout)
-import Text.Parsec (parse)
 import UntypedLambdaCalculus (eval)
-import UntypedLambdaCalculus.Parser (expr)
+import UntypedLambdaCalculus.Parser (parseExpr)
 
 prompt :: String -> IO String
 prompt text = do
@@ -13,8 +13,6 @@ prompt text = do
   getLine
 
 main :: IO ()
-main = forever $ do
-  input <- expr "stdin" <$> prompt ">> "
-  case input of
-    Left parseError -> putStrLn $ "Parse error: " ++ show parseError
-    Right ast -> print $ eval ast
+main = forever $ parseExpr "stdin" <$> prompt ">> " >>= \case
+  Left parseError -> putStrLn $ "Parse error: " ++ show parseError
+  Right expr -> print $ eval expr

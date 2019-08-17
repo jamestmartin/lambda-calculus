@@ -1,56 +1,48 @@
-{-# LANGUAGE TypeFamilies, GADTs, MultiParamTypeClasses, FlexibleInstances #-}
-module Data.Fin (Fin (Zero, Succ), toInt, pred, finRemove) where
+{-# LANGUAGE GADTs, DataKinds, KindSignatures #-}
+module Data.Fin (Fin (FZ, FS), toInt, coerceFin, pred, extract) where
 
-import Data.Functor.Foldable (Base, Recursive, project, cata)
-import Data.Injection (Injection, inject)
-import Data.Type.Nat (Nat, Zero, Succ, GTorEQ)
+import Data.Nat (Nat (S))
 import Prelude hiding (pred)
 import Unsafe.Coerce (unsafeCoerce)
 
-data Fin n where
+-- | A type with `n` inhabitants, or alternatively,
+-- | a natural number less than the upper bound parameter.
+data Fin :: Nat -> * where
   -- Fin Zero is uninhabited. Fin (Succ Zero) has one inhabitant.
-  Zero :: Nat n => Fin (Succ n)
-  Succ :: Nat n => Fin n -> Fin (Succ n)
+  FZ :: Fin ('S n)
+  FS :: Fin n -> Fin ('S n)
 
-type instance Base (Fin n) = Maybe
+instance Eq (Fin n) where
+  FZ   == FZ   = True
+  FS n == FS m = n == m
+  _    == _    = False
 
-instance (Nat n) => Injection (Fin n) (Fin (Succ n)) where
-  inject Zero = Zero
-  inject (Succ n) = Succ (inject n)
+instance Ord (Fin n) where
+  FZ   `compare` FZ   = EQ
+  FS _ `compare` FZ   = GT
+  FZ   `compare` FS _ = LT
+  FS n `compare` FS m = n `compare` m
 
-instance (Nat n) => Recursive (Fin n) where
-  project Zero     = Nothing
-  project (Succ n) = Just $ inject n
+toInt :: Fin n -> Int
+toInt FZ     = 0
+toInt (FS n) = 1 + toInt n
 
-instance (Nat n) => Eq (Fin n) where
-  Zero == Zero = True
-  Succ n == Succ m = n == m
-  _ == _ = False
-
-instance Nat n => Ord (Fin n) where
-  compare Zero     Zero     = EQ
-  compare (Succ n) Zero     = GT
-  compare Zero     (Succ n) = LT
-  compare (Succ n) (Succ m) = compare n m
-
-toInt :: Nat n => Fin n -> Int
-toInt = cata alg
-  where alg Nothing  = 0
-        alg (Just n) = n + 1
-
-instance (Nat n) => Show (Fin n) where
+instance Show (Fin n) where
   show = show . toInt
 
-pred :: Nat n => Fin (Succ n) -> Maybe (Fin n)
-pred Zero     = Nothing
-pred (Succ n) = Just n
+coerceFin :: Fin n -> Fin ('S n)
+coerceFin FZ     = FZ
+coerceFin (FS n) = FS $ coerceFin n
 
--- | Remove an element from a `Fin`'s domain.
--- | Like a generalized `pred`, only you can remove elements other than `Zero`.
-finRemove :: Nat n => Fin (Succ n) -> Fin (Succ n) -> Maybe (Fin n)
-finRemove n m
+pred :: Fin ('S n) -> Maybe (Fin n)
+pred FZ     = Nothing
+pred (FS n) = Just n
+
+-- | Match against an element in `Fin`, removing it from its domain.
+extract :: Fin ('S n) -> Fin ('S n) -> Maybe (Fin n)
+extract n m
   | n == m = Nothing
   | n >  m = pred n
   -- I am convinced it is not possible to prove to the compiler
   -- that this function is valid without `unsafeCoerce`.
-  | n <  m = Just $ unsafeCoerce n
+  | otherwise = Just $ unsafeCoerce n
