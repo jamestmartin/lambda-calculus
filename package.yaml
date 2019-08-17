@@ -18,6 +18,7 @@ dependencies:
 - parsec >= 3.1 && < 4
 - recursion-schemes >= 5.1 && < 6
 - unordered-containers >= 0.2.10 && < 0.3
+- transformers >= 0.5.6 && < 0.6
 
 library:
   source-dirs: src

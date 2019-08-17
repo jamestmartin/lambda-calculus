@@ -1,5 +1,5 @@
-{-# LANGUAGE TypeFamilies, GADTs, MultiParamTypeClasses #-}
-module Data.Fin (Fin (Zero, Succ), finUp, toInt, pred, finRemove) where
+{-# LANGUAGE TypeFamilies, GADTs, MultiParamTypeClasses, FlexibleInstances #-}
+module Data.Fin (Fin (Zero, Succ), toInt, pred, finRemove) where
 
 import Data.Functor.Foldable (Base, Recursive, project, cata)
 import Data.Injection (Injection, inject)
@@ -14,17 +14,13 @@ data Fin n where
 
 type instance Base (Fin n) = Maybe
 
-instance (Nat n, Nat m, GTorEQ m n) => Injection (Fin n) (Fin m) where
-  inject = unsafeCoerce
-  
--- | Coerce a `Fin n` into a `Fin (Succ n)`.
-finUp :: Nat n => Fin n -> Fin (Succ n)
-finUp Zero = Zero
-finUp (Succ n) = Succ (finUp n)
+instance (Nat n) => Injection (Fin n) (Fin (Succ n)) where
+  inject Zero = Zero
+  inject (Succ n) = Succ (inject n)
 
 instance (Nat n) => Recursive (Fin n) where
   project Zero     = Nothing
-  project (Succ n) = Just $ finUp n
+  project (Succ n) = Just $ inject n
 
 instance (Nat n) => Eq (Fin n) where
   Zero == Zero = True
