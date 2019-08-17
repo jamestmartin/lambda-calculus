@@ -14,6 +14,7 @@ import Text.Parsec.String
 data Ast = AstVar String
          | AstLam String Ast
          | AstApp Ast Ast
+         | AstLet String Ast Ast
 
 makeBaseFunctor ''Ast
 
@@ -22,6 +23,9 @@ instance Show Ast where
     where alg (AstVarF v)   = v
           alg (AstLamF v e) = "(\\" ++ v ++ ". " ++ e ++ ")"
           alg (AstAppF f x) = "(" ++ f ++ " " ++ x ++ ")"
+
+somespaces :: Parser ()
+somespaces = skipMany1 space
 
 -- | A variable name.
 name :: Parser String
@@ -37,6 +41,20 @@ var = AstVar <$> name
 -- | Run parser between parentheses.
 parens :: Parser a -> Parser a
 parens = between (char '(') (char ')')
+
+let_ :: Parser Ast
+let_ = do
+  string ".let"
+  somespaces
+  v <- name
+  somespaces
+  char '='
+  somespaces
+  x <- safeExpr
+  somespaces
+  string ".in"
+  e <- expr
+  return $ AstApp (AstLam v e) x
 
 -- | A lambda expression.
 lam :: Parser Ast
