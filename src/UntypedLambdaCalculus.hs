@@ -1,19 +1,26 @@
-{-# LANGUAGE TemplateHaskell, TypeFamilies, DeriveFunctor, DeriveFoldable, DeriveTraversable, MultiWayIf #-}
+{-# LANGUAGE TemplateHaskell, TypeFamilies, DeriveFunctor, DeriveFoldable, DeriveTraversable, MultiWayIf, LambdaCase, BlockArguments #-}
 module UntypedLambdaCalculus (Expr (Free, Var, Lam, App), ReaderAlg, eval, cataReader) where
 
-import Control.Monad.Reader (Reader, runReader, local, reader)
+import Control.Monad.Reader (Reader, runReader, local, reader, ask, asks)
+import Control.Monad.Writer (Writer, runWriter, listen, tell)
 import Data.Foldable (fold)
+import Data.Functor ((<&>))
 import Data.Functor.Foldable (Base, Recursive, cata, embed, project)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Monoid (Any (Any, getAny))
 
--- | A lambda calculus expression where variables are identified
--- | by their distance from their binding site (De Bruijn indices).
+-- | An expression using the Reverse De Bruijn representation.
+-- | Like De Bruijn representation, variables are named according to their binding site.
+-- | However, instead of being named by the number of binders between variable and its binder,
+-- | here variables are represented by the distance between their binder and the top level.
 data Expr = Free String
+          -- Var index is bound `index` in from the outermost binder.
+          -- The outermost binder's name is the last element of the list.
           | Var Int
-          | Lam String Expr
+          -- This lambda is `index` bindings away from the outermost binding.
+          -- If the index is `0`, then this is the outermost binder.
+          | Lam String Int Expr
           | App Expr Expr
-          | Subst Int Expr Expr
 
 makeBaseFunctor ''Expr
 
@@ -23,76 +30,68 @@ type ReaderAlg f s a = Algebra f (Reader s a)
 cataReader :: Recursive r => ReaderAlg (Base r) s a -> s -> r -> a
 cataReader f initialState x = runReader (cata f x) initialState
 
+indexOr :: a -> Int -> [a] -> a
+indexOr def index xs
+  | index < length xs && index >= 0 = xs !! index
+  | otherwise = def
+
 instance Show Expr where
-  show = cataReader alg []
-    where alg :: ReaderAlg ExprF [String] String
-          alg (FreeF v)    = return v
-          alg (VarF  i)    = reader (\vars -> vars !! i ++ ':' : show i)
-          alg (LamF v e) = do
-            body <- local (v :) e
-            return $ "(\\" ++ v ++ ". " ++ body ++ ")"
-          alg (AppF f' x') = do
-            f <- f'
-            x <- x'
-            return $ "(" ++ f ++ " " ++ x ++ ")"
-          alg (SubstF index val' body') = do
-            body <- local ("SUBSTVAR" :) body'
-            val <- val'
-            return $ body ++ "[ " ++ show index ++ " := " ++ val ++ " ]"
-
--- | Is the innermost bound variable of this subexpression (`Var 0`) used in its body?
--- | For example: in `\x. a:1 x:0 b:2`, `x:0` is bound in `a:1 x:0 b:2`.
--- | On the other hand, in `\x. a:3 b:2 c:1`, it is not.
-bound :: Expr -> Bool
-bound = getAny . cataReader alg 0
-  where alg :: ReaderAlg ExprF Int Any
-        alg (VarF index) = reader (Any . (== index))
-        alg (LamF _ e)   = local (+ 1) e
-        alg x            = fold <$> sequenceA x
-
--- | Opposite of `bound`.
-unbound :: Expr -> Bool
-unbound = not . bound
-
--- | When we bind a new variable, we enter a new scope.
--- | Since variables are identified by their distance from their binder,
--- | we must increment them to account for the incremented distance,
--- | thus embedding them into the new expression.
-liftExpr :: Int -> Expr -> Expr
-liftExpr n (Var i)     = Var $ i + n
-liftExpr _ o@(Lam _ _) = o
-liftExpr n x           = embed $ fmap (liftExpr n) $ project x
-
-substitute :: Int -> Expr -> Expr -> Expr
-substitute index val v@(Var index')
-  | index == index' = val
-  | index <  index' = Var $ index' - 1
-  | otherwise       = v
-substitute index val (Lam name body) = Lam name $ Subst (index + 1) (liftExpr 1 val) body
-substitute index val (Subst index2 val2 body) =
-  substitute index val $ substitute index2 val2 body
-substitute index val x = embed $ fmap (Subst index val) $ project x
-
-etaReduce :: String -> Expr -> Expr
--- `\x. f x -> f` if `x` is not bound in `f`.
-etaReduce name o@(App f (Var 0))
-  | unbound f = eval $ Subst 0 undefined f
-  | otherwise = Lam name $ o
--- `\x y. f y -> \x. f` if `y` is not bound in `f`;
--- the resultant term may itself be eta-reducible.
-etaReduce name (Lam name' body') = case etaReduce name' body' of
-  body@(Lam _ _) -> Lam name body
-  body -> etaReduce name body
-etaReduce name body = Lam name body
-
-betaReduce :: Expr -> Expr -> Expr
-betaReduce f' x = case eval f' of
-  Lam _ e -> eval $ Subst 0 x e
-  f -> App f $ eval x
-
--- | Evaluate an expression to normal form.
+  show = flip cataReader [] \case
+    FreeF name -> return name
+    VarF index -> asks (\boundNames -> indexOr "" (length boundNames - index - 1) boundNames)
+      <&> \name -> name ++ ":" ++ show index
+    LamF name index body' -> local (name :) body' <&> \body ->
+      "(\\" ++ name ++ ":" ++ show index ++ ". " ++ body ++ ")"
+    AppF f' x' -> f' >>= \f -> x' <&> \x ->
+      "(" ++ f ++ " " ++ x ++ ")"
+    
 eval :: Expr -> Expr
-eval (Subst index val body) = eval $ substitute index val body
-eval (App f x)              = betaReduce f x
-eval (Lam name body)        = etaReduce name body
-eval o = o
+eval x = case reduce innerReduced of
+    Just expr -> eval expr
+    Nothing -> x
+  where innerReduced = embed $ fmap eval $ project x
+
+reduce :: Expr -> Maybe Expr
+reduce (Lam name index body) = etaReduce name index body
+reduce (App f x)             = betaReduce f x
+reduce _                     = Nothing
+
+betaReduce :: Expr -> Expr -> Maybe Expr
+betaReduce (Lam name index body) x = Just $ subst index x body
+betaReduce _                     _ = Nothing
+
+etaReduce :: String -> Int -> Expr -> Maybe Expr
+etaReduce name index body@(App f (Var index'))
+  -- If the variable bound by this lambda is only used in the right hand of the outermost app,
+  -- then we may delete this function. The absolute position of all binding terms inside
+  -- this one has been decreased by the removal of this lambda, and must be renumbered.
+  | index == index' && unbound index f = Just $ subst index undefined f
+  | otherwise = Nothing
+etaReduce _ _ _ = Nothing
+
+unbound :: Int -> Expr -> Bool
+unbound index = not . bound index
+
+bound :: Int -> Expr -> Bool
+bound index = getAny . cata \case
+  VarF index' -> Any $ index == index'
+  expr -> fold expr
+
+embedExpr :: Int -> Expr -> Expr
+embedExpr index (Free name) = Free name
+embedExpr index (Var index')
+  | index' >= index = Var $ index' + 1
+  | otherwise = Var index'
+embedExpr index (App f x) = App (embedExpr index f) (embedExpr index x)
+embedExpr index (Lam name index' body) = Lam name (index' + 1) $ embedExpr index body
+
+subst :: Int -> Expr -> Expr -> Expr
+subst index val (Free name) = Free name
+subst index val (Var index')
+  | index == index' = val
+  -- There is now one fewer binding site between the innermost binding site and `index`,
+  -- thus if the binding site is further in than ours, it must be decremented.
+  | index <  index' = Var $ index' - 1
+  | otherwise = Var index'
+subst index val (App f x) = App (subst index val f) (subst index val x)
+subst index val (Lam name index' body) = Lam name (index' - 1) $ subst index (embedExpr index val) body

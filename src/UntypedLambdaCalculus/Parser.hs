@@ -2,7 +2,7 @@
 module UntypedLambdaCalculus.Parser (parseExpr) where
 
 import Control.Applicative (liftA2)
-import Control.Monad.Reader (local, asks)
+import Control.Monad.Reader (local, ask)
 import Data.List (foldl', elemIndex)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Text.Parsec (SourceName, ParseError, (<|>), many, sepBy, letter, alphaNum, char, between, spaces, parse, string)
@@ -61,19 +61,25 @@ consumesInput :: Parser Ast
 consumesInput = let_ <|> var <|> lam <|> parens app
 
 toExpr :: Ast -> Expr
-toExpr = cataReader alg []
+toExpr = cataReader alg (0, [])
   where
-    alg :: ReaderAlg AstF [String] Expr
+    alg :: ReaderAlg AstF (Int, [String]) Expr
     alg (AstVarF varName) = do
-      bindingSite <- asks (elemIndex varName)
-      return $ case bindingSite of
-        Just index -> Var index
+      (_, bound) <- ask
+      return $ case varName `elemIndex` bound of
+        Just index -> Var $ length bound - index - 1
         Nothing    -> Free varName
-    alg (AstLamF vars body) = foldr (\v e -> Lam v <$> local (v :) e) body vars
-    alg (AstAppF es) = foldl' App (Lam "x" (Var 0)) <$> sequenceA es
+    alg (AstLamF vars body) = 
+      foldr (\v e -> do
+                (index, bound) <- ask
+                Lam v index <$> local (\_ -> (index + 1, v : bound)) e) body vars
+    alg (AstAppF es) = do
+      (index, _) <- ask
+      foldl' App (Lam "x" index (Var index)) <$> sequenceA es
     alg (AstLetF var val body) = do
-      body' <- local (var :) body
-      App (Lam var body') <$> val
+      (index, bound) <- ask
+      body' <- local (\_ -> (index + 1, var : bound)) body
+      App (Lam var index body') <$> val
 
 -- | Since applications do not require parentheses and can contain only a single item,
 -- | the `app` parser is sufficient to parse any expression at all.
