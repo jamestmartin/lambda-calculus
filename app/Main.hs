@@ -1,4 +1,3 @@
-{-# LANGUAGE BlockArguments, LambdaCase #-}
 module Main where
 
 import Control.Monad (forever)
@@ -15,4 +14,4 @@ prompt text = do
 main :: IO ()
 main = forever $ parseExpr "stdin" <$> prompt ">> " >>= \case
   Left parseError -> putStrLn $ "Parse error: " ++ show parseError
-  Right expr -> print $ eval expr
+  Right expr -> do print expr; print $ eval expr

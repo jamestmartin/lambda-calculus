@@ -12,11 +12,28 @@ description:         Please see the README on GitHub at <https://github.com/jame
 extra-source-files:
 - README.md
 
+default-extensions:
+- BlockArguments
+- DataKinds
+- DeriveFoldable
+- DeriveFunctor
+- DeriveTraversable
+- FlexibleInstances
+- FunctionalDependencies
+- GADTs
+- KindSignatures
+- LambdaCase
+- MultiParamTypeClasses
+- PolyKinds
+- Rank2Types
+- TemplateHaskell
+- TypeFamilies
+- TypeOperators
+
 dependencies:
 - base >= 4.7 && < 5
 - mtl >= 2.2 && < 3
 - parsec >= 3.1 && < 4
-- recursion-schemes >= 5.1 && < 6
 
 library:
   source-dirs: src
