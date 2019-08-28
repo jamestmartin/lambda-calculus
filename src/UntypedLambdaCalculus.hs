@@ -30,6 +30,7 @@ data Expr :: Nat -> * where
   App :: Expr n -> Expr n -> Expr n
   -- | A free expression is a symbolic placeholder which reduces to itself.
   Free :: String -> Expr 'Z
+  Subst :: SNat n -> Expr m -> Expr ('S (Plus n m)) -> Expr (Plus n m)
 
 instance SNatI n => Show (Expr n) where
   show expr = show' snat expr
@@ -54,7 +55,7 @@ instance SNatI n => Show (Expr n) where
 reduce :: Expr n -> Maybe (Expr n)
 -- Note: there are no expressions which are reducible in multiple ways.
 -- Only one of these cases can apply at once.
-reduce expr = scopeReduce expr <|> betaReduce expr <|> etaReduce expr
+reduce expr = scopeReduce expr <|> substitute expr <|> betaReduce expr <|> etaReduce expr
 
 -- | A subexpression to which a reduction step may be applied is called a "redex",
 -- short for "reducible expression".
@@ -69,7 +70,7 @@ isRedex expr = isScopeRedex expr || isBetaRedex expr || isEtaRedex expr
 -- the other reductions merely define *equivalences* between expressions,
 -- so that every expression has a canonical form.
 betaReduce :: Expr n -> Maybe (Expr n)
-betaReduce (App (Lam fe) xe) = Just $ substitute xe fe
+betaReduce (App (Lam fe) xe) = Just $ Subst SZ xe fe
 -- (^) Aside: 'App' represents function application in the lambda calculus.
 -- Haskell convention would be to name the function `f` and the argument `x`,
 -- but that often collides with Haskell functions and arguments,
@@ -78,15 +79,14 @@ betaReduce (App (Lam fe) xe) = Just $ substitute xe fe
 betaReduce  _                = Nothing
 
 -- TODO: Document this.
-substitute :: Expr n -> Expr ('S n) -> Expr n
-substitute = substitute' SZ
-  where substitute' :: SNat n -> Expr m -> Expr ('S (Plus n m)) -> Expr (Plus n m)
-        substitute' SZ     x Var         = x
-        substitute' (SS _) _ Var         = Var
-        substitute' SZ     x (Drop body) = body
-        substitute' (SS n) x (Drop body) = Drop $ substitute' n x body
-        substitute' n      x (App fe xe) = App (substitute' n x fe) (substitute' n x xe)
-        substitute' n      x (Lam body)  = Lam $ substitute' (SS n) x body
+substitute :: Expr n -> Maybe (Expr n)
+substitute (Subst SZ     x Var)         = Just x
+substitute (Subst (SS _) _ Var)         = Just Var
+substitute (Subst SZ     x (Drop body)) = Just body
+substitute (Subst (SS n) x (Drop body)) = Just $ Drop $ Subst n x body
+substitute (Subst n      x (App fe xe)) = Just $ App (Subst n x fe) (Subst n x xe)
+substitute (Subst n      x (Lam body))  = Just $ Lam $ Subst (SS n) x body
+substitute _                            = Nothing
 
 -- | A predicate determining whether a subexpression would allow a beta-reduction step.
 isBetaRedex :: Expr n -> Bool
