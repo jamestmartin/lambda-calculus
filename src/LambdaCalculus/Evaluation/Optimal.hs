@@ -1,45 +1,14 @@
-module UntypedLambdaCalculus where
+-- | !!!IMPORTANT!!!
+-- This module is a WORK IN PROGRESS.
+-- It DOES NOT YET IMPLEMENT OPTIMAL EVALUATION.
+-- It currently implements *lazy* evaluation with the reverse de bruijn syntax,
+-- and my end goal is to make it support optimal evaluation,
+-- but currently it is not even close.
+module LambdaCalculus.Evaluation.Optimal where
 
 import Control.Applicative ((<|>))
-import Data.Type.Nat (Nat (Z, S), SNat (SZ, SS), SNatI, Plus, snat)
-
--- | Expressions are parametrized by the depth of the variable bindings they may access.
--- An expression in which no variables are bound (a closed expression) is represented by `Expr 'Z`.
-data Expr :: Nat -> * where
-  -- | The body of a lambda abstraction may reference all of the variables
-  -- bound in its parent, in addition to a new variable bound by the abstraction.
-  Lam :: Expr ('S n) -> Expr n
-  -- | On the other hand, any sub-expression may choose to simply ignore
-  -- the variable bound by the lambda expression,
-  -- only referencing the variables bound in its parent instead.
-  --
-  -- For example, in the constant function `\x. \y. x`,
-  -- although the innermost expression *may* access the innermost binding (`y`),
-  -- it instead only accesses the outer one, `x`.
-  -- Thus the body of the expression would be `Drop Var`.
-  --
-  -- Given the lack of any convention for how to write 'Drop',
-  -- I have chosen to write it as `?x` where `x` is the body of the drop.
-  Drop :: Expr n -> Expr ('S n)
-  -- | For this reason (see 'Drop'),
-  -- variables only need to access the innermost accessible binding.
-  -- To access outer bindings, you must first 'Drop' all of the bindings
-  -- in between the variable and the desired binding to access.
-  Var :: Expr ('S n)
-  -- | Function application. The left side is the function, and the right side is the argument.
-  App :: Expr n -> Expr n -> Expr n
-  -- | A free expression is a symbolic placeholder which reduces to itself.
-  Free :: String -> Expr 'Z
-  Subst :: SNat n -> Expr m -> Expr ('S (Plus n m)) -> Expr (Plus n m)
-
-instance SNatI n => Show (Expr n) where
-  show expr = show' snat expr
-    where show' :: SNat n -> Expr n -> String
-          show' (SS n) Var         = show n
-          show' SZ     (Free name) = name
-          show' (SS n) (Drop body) = '?' : show' n body
-          show' n      (Lam body)  = "(\\" ++ show n ++ " " ++ show' (SS n) body ++ ")"
-          show' n      (App fe xe) = "(" ++ show' n fe ++ " " ++ show' n xe ++ ")"
+import Data.Type.Nat
+import LambdaCalculus.Representation.Dependent.ReverseDeBruijn
 
 -- | The meaning of expressions is defined by how they can be reduced.
 -- There are three kinds of reduction: beta-reduction ('betaReduce'),
@@ -52,14 +21,14 @@ instance SNatI n => Show (Expr n) where
 -- or, if there is no applicable reduction rule, returns nothing.
 -- The lack of an applicable reduction rule does not necessarily mean
 -- that an expression is irreducible: see 'evaluate' for more information.
-reduce :: Expr n -> Maybe (Expr n)
+reduce :: Expression n -> Maybe (Expression n)
 -- Note: there are no expressions which are reducible in multiple ways.
 -- Only one of these cases can apply at once.
 reduce expr = scopeReduce expr <|> substitute expr <|> betaReduce expr <|> etaReduce expr
 
 -- | A subexpression to which a reduction step may be applied is called a "redex",
 -- short for "reducible expression".
-isRedex :: Expr n -> Bool
+isRedex :: Expression n -> Bool
 isRedex expr = isScopeRedex expr || isBetaRedex expr || isEtaRedex expr
 
 -- | Beta reduction describes how functions behave when applied to arguments.
@@ -69,9 +38,9 @@ isRedex expr = isScopeRedex expr || isBetaRedex expr || isEtaRedex expr
 -- Only this rule is necessary for the lambda calculus to be turing-complete;
 -- the other reductions merely define *equivalences* between expressions,
 -- so that every expression has a canonical form.
-betaReduce :: Expr n -> Maybe (Expr n)
-betaReduce (App (Lam fe) xe) = Just $ Subst SZ xe fe
--- (^) Aside: 'App' represents function application in the lambda calculus.
+betaReduce :: Expression n -> Maybe (Expression n)
+betaReduce (Application (Abstraction fe) xe) = Just $ Substitution SZ xe fe
+-- (^) Aside: 'Application' represents function application in the lambda calculus.
 -- Haskell convention would be to name the function `f` and the argument `x`,
 -- but that often collides with Haskell functions and arguments,
 -- so instead I will be calling them `fe` and `xe`,
@@ -79,18 +48,18 @@ betaReduce (App (Lam fe) xe) = Just $ Subst SZ xe fe
 betaReduce  _                = Nothing
 
 -- TODO: Document this.
-substitute :: Expr n -> Maybe (Expr n)
-substitute (Subst SZ     x Var)         = Just x
-substitute (Subst (SS _) _ Var)         = Just Var
-substitute (Subst SZ     x (Drop body)) = Just body
-substitute (Subst (SS n) x (Drop body)) = Just $ Drop $ Subst n x body
-substitute (Subst n      x (App fe xe)) = Just $ App (Subst n x fe) (Subst n x xe)
-substitute (Subst n      x (Lam body))  = Just $ Lam $ Subst (SS n) x body
+substitute :: Expression n -> Maybe (Expression n)
+substitute (Substitution SZ     x Variable)         = Just x
+substitute (Substitution (SS _) _ Variable)         = Just Variable
+substitute (Substitution SZ     x (Drop body)) = Just body
+substitute (Substitution (SS n) x (Drop body)) = Just $ Drop $ Substitution n x body
+substitute (Substitution n      x (Application fe xe)) = Just $ Application (Substitution n x fe) (Substitution n x xe)
+substitute (Substitution n      x (Abstraction body))  = Just $ Abstraction $ Substitution (SS n) x body
 substitute _                            = Nothing
 
 -- | A predicate determining whether a subexpression would allow a beta-reduction step.
-isBetaRedex :: Expr n -> Bool
-isBetaRedex (App (Lam _) _) = True
+isBetaRedex :: Expression n -> Bool
+isBetaRedex (Application (Abstraction _) _) = True
 isBetaRedex _               = False
 
 -- | For any expression `f`, `f` is equivalent to `\x. ?f x`, a property called "eta-equivalence".
@@ -105,18 +74,18 @@ isBetaRedex _               = False
 -- (from within the context of the logical system, i.e. without regard to representation).
 -- In the context of functions, this would mean that two functions are equal
 -- if and only if they give the same result for all arguments.
-etaReduce :: Expr n -> Maybe (Expr n)
-etaReduce (Lam (App (Drop fe) Var)) = Just fe
+etaReduce :: Expression n -> Maybe (Expression n)
+etaReduce (Abstraction (Application (Drop fe) Variable)) = Just fe
 etaReduce _                         = Nothing
 
 -- | A predicate determining whether a subexpression would allow an eta-reduction step.
-isEtaRedex :: Expr n -> Bool
-isEtaRedex (Lam (App (Drop _) Var )) = True
+isEtaRedex :: Expression n -> Bool
+isEtaRedex (Abstraction (Application (Drop _) Variable )) = True
 isEtaRedex _                         = False
 
 -- | Eta-expansion, the inverse of 'etaReduce'.
-etaExpand :: Expr n -> Expr n
-etaExpand fe = Lam $ App (Drop fe) Var
+etaExpand :: Expression n -> Expression n
+etaExpand fe = Abstraction $ Application (Drop fe) Variable
 
 -- TODO: Scope conversion isn't a real conversion relationship!
 -- 'scopeExpand' can only be applied a finite number of times.
@@ -147,34 +116,34 @@ etaExpand fe = Lam $ App (Drop fe) Var
 -- if and only if it is used in at least one of its sub-expressions.
 --
 -- Similarly to 'etaReduce', there is also define an inverse function, 'scopeExpand'.
-scopeReduce :: Expr n -> Maybe (Expr n)
-scopeReduce (App (Drop fe) (Drop xe)) = Just $ Drop $ App fe xe
+scopeReduce :: Expression n -> Maybe (Expression n)
+scopeReduce (Application (Drop fe) (Drop xe)) = Just $ Drop $ Application fe xe
 -- TODO: I feel like there's a more elegant way to represent this.
--- It feels like `Lam (Drop body)` should be its own atomic unit.
+-- It feels like `Abstraction (Drop body)` should be its own atomic unit.
 -- Maybe I could consider a combinator-based representation,
--- where `Lam (Drop body)` is just the `K` combinator `K body`?
-scopeReduce (Lam (Drop (Drop body)))  = Just $ Drop $ Lam $ Drop body
+-- where `Abstraction (Drop body)` is just the `K` combinator `K body`?
+scopeReduce (Abstraction (Drop (Drop body)))  = Just $ Drop $ Abstraction $ Drop body
 scopeReduce _                         = Nothing
 
 -- | A predicate determining whether a subexpression would allow a scope-reduction step.
-isScopeRedex :: Expr n -> Bool
-isScopeRedex (App (Drop _) (Drop _)) = True
-isScopeRedex (Lam (Drop (Drop _)))   = True
+isScopeRedex :: Expression n -> Bool
+isScopeRedex (Application (Drop _) (Drop _)) = True
+isScopeRedex (Abstraction (Drop (Drop _)))   = True
 isScopeRedex _                       = False
 
 -- | Scope-expansion, the left inverse of 'scopeReduce'.
-scopeExpand :: Expr n -> Maybe (Expr n)
-scopeExpand (Drop (App fe xe))       = Just $ App (Drop fe) (Drop xe)
-scopeExpand (Drop (Lam (Drop body))) = Just $ Lam $ Drop $ Drop body
-scopeExpand _                        = Nothing
+scopeExpand :: Expression n -> Maybe (Expression n)
+scopeExpand (Drop (Application fe xe))         = Just $ Application (Drop fe) (Drop xe)
+scopeExpand (Drop (Abstraction (Drop body))) = Just $ Abstraction $ Drop $ Drop body
+scopeExpand _                                = Nothing
 
 -- | An expression is in "normal form" if it contains no redexes (see 'isRedex').
-isNormal :: Expr n -> Bool
+isNormal :: Expression n -> Bool
 isNormal expr = not (isRedex expr) && case expr of
   -- In addition to this expression not being a redex,
   -- we must check that none of its subexpressions are redexes either.
-  App fe xe -> isNormal fe && isNormal xe
-  Lam e     -> isNormal e
+  Application fe xe -> isNormal fe && isNormal xe
+  Abstraction e     -> isNormal e
   Drop e    -> isNormal e
   _         -> True
 
@@ -189,7 +158,7 @@ isNormal expr = not (isRedex expr) && case expr of
 -- the expression it is normalizing has a normal form.
 --
 -- I have chosen to use a normalizing reduction strategy.
-eval :: Expr n -> Expr n
+eval :: Expression n -> Expression n
 eval expr = case reduce innerReduced of
   Just e -> eval e
   -- The expression didn't make any progress,
@@ -200,7 +169,7 @@ eval expr = case reduce innerReduced of
   Nothing -> innerReduced
   where innerReduced = case expr of
           -- TODO: Factor out this recursive case (from 'isNormal' too).
-          App fe xe -> App (eval fe) (eval xe)
-          Lam e -> Lam (eval e)
+          Application fe xe -> Application (eval fe) (eval xe)
+          Abstraction e -> Abstraction (eval e)
           Drop e -> Drop (eval e)
           x -> x

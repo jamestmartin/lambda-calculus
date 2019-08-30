@@ -1,10 +1,9 @@
-# untyped-lambda-calculus
-A simple implementation of the untyped lambda calculus as an exercise.
+# James Martin's Lambda Calculus
+An implementation of various type systems and evaluation strategies
+for the lambda calculus.
 
-This implementation lacks many features necessary to be useful,
-for example `let` bindings, built-in functions, binding free variables, or a good REPL.
-This project purely exists as an exercise and is not intended for general use.
-I will make useful programming languages in the future, but this is not one of them.
+This project is a work-in-progress, and currently lacks many essential features
+that would be necessary to be a useful programming language.
 
 ## Usage
 Type in your expression at the prompt: `>> `.
@@ -45,3 +44,69 @@ Since `\x. x` is the left identity of applications and application syntax is lef
 I (syntactically) permit unary and nullary applications so that `()` is `\x. x`, and `(x)` is `x`.
 
 On the same principle, the syntax of a lambda of no variables `\. e` is `e`.
+
+## Roadmap
+### Complete
+* Type systems:
+  * Untyped
+* Representations:
+  * The syntax tree
+  * Reverse de Bruijn
+* Syntax:
+  * Basic syntax
+  * Let expressions
+* Evaluation strategies:
+  * Lazy (call-by-name to normal form)
+  
+### In-progress
+* Type systems:
+  * Simply typed
+* Representations:
+  * De Bruijn
+
+### Planned
+My ultimate goal is to develop this into a programming language
+that would at least theoretically be practically useful.
+I intend to do a lot more than this in the long run,
+but it's far enough off that I haven't nailed down the specifics yet.
+
+* Built-ins:
+  * Integers
+* Type systems:
+  * Hindley-Milner
+  * System F
+* Representations:
+  * A more conservative syntax tree that would allow for better error messages
+* Evaluation strategies:
+  * Complete laziness
+  * Optimal
+* Syntax:
+  * Top-level definitions
+  * Type annotations
+  * `let*`, `letrec`
+  * More syntax (parsing and printing) options:
+    * Also allow warnings instead of errors on disabled syntax.
+      * Or set a preferred printing style without warnings.
+      * Or print in an entirely different syntax than the input!
+    * Disable empty `application`: `()` no longer parses (as `\x. x`).
+      * Forbid single-term `application`: `(x)` no longer parses as `x`.
+    * Disable empty `variable-list`: `λ. x` no longer parses (as just `x`).
+    * Disable block arguments: `f λx. x` is no longer permitted; `f (λx. x)` must be used instead.
+      * Except for at the top level, where an unclosed lambda is always permitted.
+    * Configurable `variable-list` syntax:
+      * Mathematics style: One-letter variable names, no variable separators.
+      * Computer science style: Variable names separated by commas instead of spaces.
+    * Configurable `λ` syntax: any one of `λ`, `\`, or `^`, as I've seen all three in use.
+      * Currently, either `λ` or `\` is permitted, and it is impossible to disable either.
+    * Disable `let` expressions.
+    * Disable syntactic sugar entirely (never drop parentheses).
+    * Pedantic mode: forbid using more parentheses than necessary.
+    * Pedantic whitespace (e.g. forbid ` (  a    b c)`).
+  * Pretty-printing mode.
+  * Indentation-based syntax.
+* Features:
+  * A better REPL (e.g. the ability to edit the line buffer)
+  * The ability to import external files
+  * The ability to choose the type system or evaluation strategy
+  * Better error messages for parsing and typechecking
+  * Reduction stepping

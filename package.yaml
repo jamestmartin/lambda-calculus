@@ -1,13 +1,13 @@
-name:                untyped-lambda-calculus
+name:                jtm-lambda-calculus
 version:             0.1.0.0
-github:              "jamestmartin/untyped-lambda-calculus"
+github:              "jamestmartin/lambda-calculus"
 license:             GPL-3
 author:              "James Martin"
 maintainer:          "james@jtmar.me"
 copyright:           "2019 James Martin"
-synopsis:            "A simple implementation of the untyped lambda calculus as an exercise."
+synopsis:            "Implementations of various Lambda Calculus evaluators and type systems."
 category:            LambdaCalculus
-description:         Please see the README on GitHub at <https://github.com/jamestmartin/untyped-lambda-calculus#readme>
+description:         Please see the README on GitHub at <https://github.com/jamestmartin/lambda-calculus#readme>
 
 extra-source-files:
 - README.md
@@ -32,14 +32,19 @@ default-extensions:
 
 dependencies:
 - base >= 4.7 && < 5
+# used for `recursion-schemes` histomorphisms
+- free >= 5.1 && < 6
 - mtl >= 2.2 && < 3
 - parsec >= 3.1 && < 4
+- recursion-schemes >= 5.1 && < 6
+# HashSet used to hold the set of free variables
+- unordered-containers >= 0.2.10 && < 0.3
 
 library:
   source-dirs: src
 
 executables:
-  untyped-lambda-calculus-exe:
+  jtm-lambda-calculus-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -47,4 +52,4 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - untyped-lambda-calculus
+    - jtm-lambda-calculus

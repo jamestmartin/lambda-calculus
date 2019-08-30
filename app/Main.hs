@@ -1,9 +1,12 @@
 module Main where
 
 import Control.Monad (forever)
+import Data.Type.Nat (Nat (Z))
 import System.IO (hFlush, stdout)
-import UntypedLambdaCalculus (eval)
-import UntypedLambdaCalculus.Parser (parseExpr)
+import LambdaCalculus.Evaluation.Optimal (eval)
+import LambdaCalculus.Parser (parse)
+import LambdaCalculus.Representation (convert)
+import LambdaCalculus.Representation.Dependent.ReverseDeBruijn (Expression)
 
 prompt :: String -> IO String
 prompt text = do
@@ -12,6 +15,6 @@ prompt text = do
   getLine
 
 main :: IO ()
-main = forever $ parseExpr "stdin" <$> prompt ">> " >>= \case
+main = forever $ parse "stdin" <$> prompt ">> " >>= \case
   Left parseError -> putStrLn $ "Parse error: " ++ show parseError
-  Right expr -> do print expr; print $ eval expr
+  Right expr -> do print expr; print $ eval (convert expr :: Expression 'Z)
