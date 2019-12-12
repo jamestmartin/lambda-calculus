@@ -12,39 +12,16 @@ description:         Please see the README on GitHub at <https://github.com/jame
 extra-source-files:
 - README.md
 
-default-extensions:
-- BlockArguments
-- DataKinds
-- DeriveFoldable
-- DeriveFunctor
-- DeriveTraversable
-- FlexibleInstances
-- FunctionalDependencies
-- GADTs
-- KindSignatures
-- LambdaCase
-- MultiParamTypeClasses
-- PolyKinds
-- Rank2Types
-- TemplateHaskell
-- TypeFamilies
-- TypeOperators
-
 dependencies:
-- base >= 4.7 && < 5
-# used for `recursion-schemes` histomorphisms
-- free >= 5.1 && < 6
-- mtl >= 2.2 && < 3
+- base >= 4.12 && < 5
 - parsec >= 3.1 && < 4
-- recursion-schemes >= 5.1 && < 6
-# HashSet used to hold the set of free variables
 - unordered-containers >= 0.2.10 && < 0.3
 
 library:
   source-dirs: src
 
 executables:
-  jtm-lambda-calculus-exe:
+  jtm-lambda-calculus:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -53,3 +30,19 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - jtm-lambda-calculus
+
+tests:
+  jtm-lambda-calculus-test:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - jtm-lambda-calculus
+    - generic-random >= 1.2 && < 2
+    - QuickCheck >= 2.13 && < 3
+    - tasty >= 1.2 && < 2
+    - tasty-hunit >= 0.10 && < 0.11
+    - tasty-quickcheck >= 0.10.1 && < 0.11

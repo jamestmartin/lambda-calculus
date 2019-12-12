@@ -1,12 +1,10 @@
+{-# LANGUAGE LambdaCase #-}
 module Main where
 
 import Control.Monad (forever)
-import Data.Type.Nat (Nat (Z))
+import LambdaCalculus.Expression (lazyEval)
+import LambdaCalculus.Parser (parseExpression)
 import System.IO (hFlush, stdout)
-import LambdaCalculus.Evaluation.Optimal (eval)
-import LambdaCalculus.Parser (parse)
-import LambdaCalculus.Representation (convert)
-import LambdaCalculus.Representation.Dependent.ReverseDeBruijn (Expression)
 
 prompt :: String -> IO String
 prompt text = do
@@ -15,6 +13,6 @@ prompt text = do
   getLine
 
 main :: IO ()
-main = forever $ parse "stdin" <$> prompt ">> " >>= \case
+main = forever $ parseExpression <$> prompt ">> " >>= \case
   Left parseError -> putStrLn $ "Parse error: " ++ show parseError
-  Right expr -> do print expr; print $ eval (convert expr :: Expression 'Z)
+  Right expr -> print $ lazyEval expr
