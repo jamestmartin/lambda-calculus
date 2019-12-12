@@ -12,9 +12,14 @@ description:         Please see the README on GitHub at <https://github.com/jame
 extra-source-files:
 - README.md
 
+default-extensions:
+- OverloadedStrings
+
 dependencies:
 - base >= 4.12 && < 5
 - parsec >= 3.1 && < 4
+- text >= 1.2 && < 2
+- text-show >= 3.8 && < 4
 - unordered-containers >= 0.2.10 && < 0.3
 
 library:

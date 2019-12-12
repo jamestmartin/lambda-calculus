@@ -2,15 +2,17 @@ module LambdaCalculus.Parser (parseExpression) where
 
 import Control.Applicative ((*>))
 import Control.Monad (void)
-import LambdaCalculus.Expression (Expression (Variable, Application, Abstraction))
+import Data.Text (Text)
+import qualified Data.Text as T
+import LambdaCalculus.Expression
 import Text.Parsec hiding (spaces)
-import Text.Parsec.String
+import Text.Parsec.Text
 
 spaces :: Parser ()
 spaces = void $ many1 space
 
-variableName :: Parser String
-variableName = many1 letter
+variableName :: Parser Text
+variableName = T.pack <$> many1 letter
 
 variable :: Parser Expression
 variable = Variable <$> variableName
@@ -33,5 +35,5 @@ abstraction = do
 expression :: Parser Expression
 expression = abstraction <|> application <|> variable
 
-parseExpression :: String -> Either ParseError Expression
-parseExpression = parse (expression <* eof) "input"
+parseExpression :: Text -> Either ParseError Expression
+parseExpression code = parse (expression <* eof) "input" code

@@ -5,33 +5,39 @@ import Data.List (elemIndex, find)
 import Data.Maybe (fromJust)
 import Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
+import Data.Text (Text)
+import qualified Data.Text as T
 import GHC.Generics (Generic)
+import TextShow
 
 data Expression
-  = Variable String
+  = Variable Text
   | Application Expression Expression
-  | Abstraction String Expression
+  | Abstraction Text Expression
   deriving (Eq, Generic)
 
+instance TextShow Expression where
+  showb (Variable var) = fromText var
+  showb (Application ef ex) = "(" <> showb ef <> " " <> showb ex <> ")"
+  showb (Abstraction var body) = "(^" <> fromText var <> "." <> showb body <> ")"
+
 instance Show Expression where
-  show (Variable var) = var
-  show (Application ef ex) = "(" ++ show ef ++ " " ++ show ex ++ ")"
-  show (Abstraction var body) = "(^" ++ var ++ "." ++ show body ++ ")"
+  show = T.unpack . showt
 
 -- | Free variables are variables which are present in an expression but not bound by any abstraction.
-freeVariables :: Expression -> HashSet String
+freeVariables :: Expression -> HashSet Text
 freeVariables (Variable variable) = HS.singleton variable
 freeVariables (Application ef ex) = freeVariables ef `HS.union` freeVariables ex
 freeVariables (Abstraction variable body) = HS.delete variable $ freeVariables body
 
 -- | Return True if the given variable is free in the given expression.
-freeIn :: String -> Expression -> Bool
+freeIn :: Text -> Expression -> Bool
 freeIn var1 (Variable var2) = var1 == var2
 freeIn var (Application ef ex) = var `freeIn` ef && var `freeIn` ex
 freeIn var1 (Abstraction var2 body) = var1 == var2 || var1 `freeIn` body
 
 -- | Bound variables are variables which are bound by any abstraction in an expression.
-boundVariables :: Expression -> HashSet String
+boundVariables :: Expression -> HashSet Text
 boundVariables (Variable _) = HS.empty
 boundVariables (Application ef ex) = boundVariables ef `HS.union` boundVariables ex
 boundVariables (Abstraction variable body) = HS.insert variable $ boundVariables body
@@ -45,7 +51,7 @@ closed = HS.null . freeVariables
 -- i.e. one can be converted to the other using only alpha-conversion.
 alphaEquivalent :: Expression -> Expression -> Bool
 alphaEquivalent = alphaEquivalent' [] []
-  where alphaEquivalent' :: [String] -> [String] -> Expression -> Expression -> Bool
+  where alphaEquivalent' :: [Text] -> [Text] -> Expression -> Expression -> Bool
         alphaEquivalent' ctx1 ctx2 (Variable v1) (Variable v2)
           -- Two variables are alpha-equivalent if they are bound in the same location.
           = bindingSite ctx1 v1 == bindingSite ctx2 v2
@@ -59,13 +65,13 @@ alphaEquivalent = alphaEquivalent' [] []
 
         -- | The binding site of a variable is either the index of its binder
         -- or, if it is unbound, the name of the free variable.
-        bindingSite :: [String] -> String -> Either String Int
+        bindingSite :: [Text] -> Text -> Either Text Int
         bindingSite ctx var = maybeToRight var $ var `elemIndex` ctx
           where maybeToRight :: b -> Maybe a -> Either b a
                 maybeToRight default_ = maybe (Left default_) Right
 
 -- | Substitution is the process of replacing all free occurrences of a variable in one expression with another expression.
-substitute :: String -> Expression -> Expression -> Expression
+substitute :: Text -> Expression -> Expression -> Expression
 substitute var1 value unmodified@(Variable var2)
   | var1 == var2 = value
   | otherwise = unmodified
@@ -74,11 +80,17 @@ substitute var value (Application ef ex)
 substitute var1 value unmodified@(Abstraction var2 body)
   | var1 == var2 = unmodified
   | otherwise = Abstraction var2' $ substitute var1 value $ alphaConvert var2 var2' body
-  where var2' = escapeName (freeVariables value) var2
+  where var2' :: Text
+        var2' = escapeName (freeVariables value) var2
+
+        alphaConvert :: Text -> Text -> Expression -> Expression
         alphaConvert oldName newName expr = substitute oldName (Variable newName) expr
         -- | Generate a new name which isn't present in the set, based on the old name.
+        escapeName :: HashSet Text -> Text -> Text
         escapeName env name = fromJust $ find (not . free) names
-          where names = name : map ('\'' :) names
+          where names :: [Text]
+                names = name : map (`T.snoc` '\'') names
+                free :: Text -> Bool
                 free = (`HS.member` env)
 
 -- | Returns True if the top-level expression is reducible by beta-reduction.

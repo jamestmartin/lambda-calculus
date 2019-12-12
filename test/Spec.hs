@@ -1,4 +1,5 @@
 import Data.Char (isAlpha)
+import qualified Data.Text as T
 import Generic.Random (genericArbitraryRec, uniform)
 import LambdaCalculus.Expression
 import LambdaCalculus.Parser
@@ -6,9 +7,13 @@ import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
+import TextShow (showt)
 
 instance Arbitrary Expression where
   arbitrary = genericArbitraryRec uniform
+
+instance Arbitrary T.Text where
+  arbitrary = T.pack <$> listOf1 (elements $ ['A'..'Z'] ++ ['a'..'z'])
 
 dfi :: Expression
 dfi = Application d (Application f i)
@@ -31,13 +36,7 @@ ttttt = Application (Application (Application f t) (Abstraction "x" (Variable "x
           (Variable "x")
 
 prop_parseExpression_inverse :: Expression -> Bool
-prop_parseExpression_inverse expr' = Right expr == parseExpression (show expr)
-  where expr = legalizeVariables expr'
-        legalizeVariables (Variable var) = Variable $ legalVar var
-        legalizeVariables (Application ef ex) = Application (legalizeVariables ef) (legalizeVariables ex)
-        legalizeVariables (Abstraction var body) = Abstraction (legalVar var) $ legalizeVariables body
-        legalVar var = 'v' : filter isAlpha var
-
+prop_parseExpression_inverse expr = Right expr == parseExpression (showt expr)
 
 main :: IO ()
 main = defaultMain $

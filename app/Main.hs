@@ -2,15 +2,17 @@
 module Main where
 
 import Control.Monad (forever)
+import Data.Text
+import qualified Data.Text.IO as TIO
 import LambdaCalculus.Expression (lazyEval)
 import LambdaCalculus.Parser (parseExpression)
 import System.IO (hFlush, stdout)
 
-prompt :: String -> IO String
+prompt :: Text -> IO Text
 prompt text = do
-  putStr text
+  TIO.putStr text
   hFlush stdout
-  getLine
+  TIO.getLine
 
 main :: IO ()
 main = forever $ parseExpression <$> prompt ">> " >>= \case
