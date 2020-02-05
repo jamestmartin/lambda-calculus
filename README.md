@@ -1,9 +1,15 @@
 # James Martin's Lambda Calculus
-An implementation of various type systems and evaluation strategies
-for the lambda calculus.
+Currently, this is a simple implementation of the untyped lambda calculus.
+However, my ultimate goal for the project is to slowly add practical features and type systems to the lambda calculus
+until it has become usable as an independent programming language.
 
-This project is a work-in-progress, and currently lacks many essential features
-that would be necessary to be a useful programming language.
+I have implemented many of those features in previous versions of the project (see the Git history),
+including many AST representations and a partial implementation of Thyer's optimal evaluation algorithm,
+but ended up starting a new rewrite because my old code was unnecessarily complex.
+These features will be added back on as time progresses.
+
+Also note that the rest of this README pertains to a previous revision of the repository and does not apply anymore.
+I will update it the next time I have a chance to work on this project.
 
 ## Usage
 Type in your expression at the prompt: `>> `.
