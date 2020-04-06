@@ -1,15 +1,7 @@
 # James Martin's Lambda Calculus
-Currently, this is a simple implementation of the untyped lambda calculus.
-However, my ultimate goal for the project is to slowly add practical features and type systems to the lambda calculus
-until it has become usable as an independent programming language.
-
-I have implemented many of those features in previous versions of the project (see the Git history),
-including many AST representations and a partial implementation of Thyer's optimal evaluation algorithm,
-but ended up starting a new rewrite because my old code was unnecessarily complex.
-These features will be added back on as time progresses.
-
-Also note that the rest of this README pertains to a previous revision of the repository and does not apply anymore.
-I will update it the next time I have a chance to work on this project.
+This project is a tool for me to learn about implementing various concepts from programming language theory, in particular those that relate to the lambda calculus.
+I also hope to equip it with enough useful features that it is a usable for real programming tasks, at least as a toy.
+Ideally, this will also be a useful tool for *others* to learn about the lambda calculus through experimentation.
 
 ## Usage
 Type in your expression at the prompt: `>> `.
@@ -63,56 +55,55 @@ On the same principle, the syntax of a lambda of no variables `\. e` is `e`.
   * Let expressions
 * Evaluation strategies:
   * Lazy (call-by-name to normal form)
-  
-### In-progress
-* Type systems:
-  * Simply typed
-* Representations:
-  * De Bruijn
 
 ### Planned
-My ultimate goal is to develop this into a programming language
-that would at least theoretically be practically useful.
-I intend to do a lot more than this in the long run,
-but it's far enough off that I haven't nailed down the specifics yet.
-
+Not all of these will necessarily (or even probably) be implemented.
+This is more-or-less a wishlist of things I'd like to try to implement some day.
 * Built-ins:
   * Integers
+  * Characters
+  * Strings
+  * Lists
 * Type systems:
+  * all of the systems of the Lambda Cube
   * Hindley-Milner
-  * System F
+  * and the calculus of (co)inductive constructions
+    * and something based on cubical TT
+    * and something with universe polymorphism
+    * and something with insanely dependent types
+    * and support for tactics
+  * and something with non-trivial subtyping
+  * and something with row polymorphism
+  * and something with typeclasses/constraints
+  * and something with irrelevance (runtime, true irrelevance, prop)
+  * and something with iso/equirecursive types?
+  * (classical?) linear types
+    * something with lifetimes, like Rust
+    * something that would work on a quantum computer, at least in theory
+    * something with proof nets?
+* Macros, fexprs
+* (Delimited) continuations
+  * Something based on lambda-mu?
+* Effects:
+  * A (co)effects system.
+  * Call-by-push-value.
 * Representations:
   * A more conservative syntax tree that would allow for better error messages
 * Evaluation strategies:
-  * Complete laziness
+  * The evaluation strategies documented by Thierry(?)
+    * Full laziness
+    * Complete laziness
   * Optimal
 * Syntax:
   * Top-level definitions
   * Type annotations
   * `let*`, `letrec`
-  * More syntax (parsing and printing) options:
-    * Also allow warnings instead of errors on disabled syntax.
-      * Or set a preferred printing style without warnings.
-      * Or print in an entirely different syntax than the input!
-    * Disable empty `application`: `()` no longer parses (as `\x. x`).
-      * Forbid single-term `application`: `(x)` no longer parses as `x`.
-    * Disable empty `variable-list`: `λ. x` no longer parses (as just `x`).
-    * Disable block arguments: `f λx. x` is no longer permitted; `f (λx. x)` must be used instead.
-      * Except for at the top level, where an unclosed lambda is always permitted.
-    * Configurable `variable-list` syntax:
-      * Mathematics style: One-letter variable names, no variable separators.
-      * Computer science style: Variable names separated by commas instead of spaces.
-    * Configurable `λ` syntax: any one of `λ`, `\`, or `^`, as I've seen all three in use.
-      * Currently, either `λ` or `\` is permitted, and it is impossible to disable either.
-    * Disable `let` expressions.
-    * Disable syntactic sugar entirely (never drop parentheses).
-    * Pedantic mode: forbid using more parentheses than necessary.
-    * Pedantic whitespace (e.g. forbid ` (  a    b c)`).
   * Pretty-printing mode.
   * Indentation-based syntax.
 * Features:
   * A better REPL (e.g. the ability to edit the line buffer)
   * The ability to import external files
+    * A good module system?
   * The ability to choose the type system or evaluation strategy
   * Better error messages for parsing and typechecking
   * Reduction stepping
