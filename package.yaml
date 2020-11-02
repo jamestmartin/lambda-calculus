@@ -4,8 +4,8 @@ github:              "jamestmartin/lambda-calculus"
 license:             GPL-3
 author:              "James Martin"
 maintainer:          "james@jtmar.me"
-copyright:           "2019 James Martin"
-synopsis:            "Implementations of various Lambda Calculus evaluators and type systems."
+copyright:           "2019-2020 James Martin"
+synopsis:            "A simple implementation of the lambda calculus."
 category:            LambdaCalculus
 description:         Please see the README on GitHub at <https://github.com/jamestmartin/lambda-calculus#readme>
 
@@ -16,7 +16,7 @@ default-extensions:
 - OverloadedStrings
 
 dependencies:
-- base >= 4.12 && < 5
+- base >= 4.13 && < 5
 - parsec >= 3.1 && < 4
 - text >= 1.2 && < 2
 - text-show >= 3.8 && < 4

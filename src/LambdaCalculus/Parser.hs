@@ -12,28 +12,51 @@ spaces :: Parser ()
 spaces = void $ many1 space
 
 variableName :: Parser Text
-variableName = T.pack <$> many1 letter
+variableName = do
+  notFollowedBy anyKeyword
+  T.pack <$> many1 letter
+  where anyKeyword = choice $ map keyword keywords
+        keywords = ["let", "in"]
+
+-- | Match an exact string which is not just a substring
+-- of a larger variable name.
+keyword :: Text -> Parser ()
+keyword kwd = try $ do
+  void $ string (T.unpack kwd)
+  notFollowedBy letter
 
 variable :: Parser Expression
 variable = Variable <$> variableName
 
 application :: Parser Expression
-application = foldl1 Application <$> sepBy1 applicationTerm spaces
+application = foldl1 Application <$> sepEndBy1 applicationTerm spaces
   where applicationTerm :: Parser Expression
-        applicationTerm = variable <|> abstraction <|> grouping
+        applicationTerm = variable <|> abstraction <|> let_ <|> grouping
           where grouping :: Parser Expression
                 grouping = between (char '(') (char ')') expression
 
 abstraction :: Parser Expression
 abstraction = do
-  char '^'
-  names <- sepBy1 variableName spaces
+  char '\\'
+  optional spaces
+  names <- sepEndBy1 variableName spaces
   char '.'
+  optional spaces
   body <- expression
   pure $ foldr Abstraction body names
 
+let_ :: Parser Expression
+let_ = do
+  keyword "let"
+  name <- between spaces (optional spaces) variableName
+  char '='
+  value <- expression
+  keyword "in"
+  body <- expression
+  pure $ Application (Abstraction name body) value
+
 expression :: Parser Expression
-expression = abstraction <|> application <|> variable
+expression = optional spaces *> (abstraction <|> let_ <|> application <|> variable) <* optional spaces
 
 parseExpression :: Text -> Either ParseError Expression
-parseExpression code = parse (expression <* eof) "input" code
+parseExpression = parse (expression <* eof) "input"

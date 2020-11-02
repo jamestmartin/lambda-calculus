@@ -4,7 +4,7 @@ module Main where
 import Control.Monad (forever)
 import Data.Text
 import qualified Data.Text.IO as TIO
-import LambdaCalculus.Expression (lazyEval)
+import LambdaCalculus.Expression (eagerEval)
 import LambdaCalculus.Parser (parseExpression)
 import System.IO (hFlush, stdout)
 
@@ -17,4 +17,4 @@ prompt text = do
 main :: IO ()
 main = forever $ parseExpression <$> prompt ">> " >>= \case
   Left parseError -> putStrLn $ "Parse error: " ++ show parseError
-  Right expr -> print $ lazyEval expr
+  Right expr -> print $ eagerEval expr
