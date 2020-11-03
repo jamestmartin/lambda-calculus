@@ -1,12 +1,17 @@
-module LambdaCalculus.Parser (parseExpression) where
+module LambdaCalculus.Parser
+    ( parseAST, parseExpression
+    ) where
 
 import Control.Applicative ((*>))
 import Control.Monad (void)
 import Data.Text (Text)
 import qualified Data.Text as T
-import LambdaCalculus.Expression
+import LambdaCalculus.Expression (Expression, ast2expr)
+import qualified LambdaCalculus.Expression as Expr
+import LambdaCalculus.Parser.AbstractSyntax
 import Text.Parsec hiding (spaces)
 import Text.Parsec.Text
+import TextShow
 
 keywords :: [Text]
 keywords = ["let", "in"]
@@ -18,51 +23,50 @@ keyword kwd = do
     notFollowedBy letter
 
 -- | An identifier is a sequence of letters which is not a keyword.
-identifier :: Parser Text
+identifier :: Parser Identifier
 identifier = do
     notFollowedBy anyKeyword
     T.pack <$> many1 letter
   where anyKeyword = choice $ map (try . keyword) keywords
 
-variable :: Parser Expression
+variable :: Parser AbstractSyntax
 variable = Variable <$> identifier
 
 spaces :: Parser ()
 spaces = skipMany1 space
 
-application :: Parser Expression
-application = foldl1 Application <$> sepEndBy1 applicationTerm spaces
-  where applicationTerm :: Parser Expression
+application :: Parser AbstractSyntax
+application = Application <$> sepEndBy1 applicationTerm spaces
+  where applicationTerm :: Parser AbstractSyntax
         applicationTerm = abstraction <|> grouping <|> let_ <|> variable
-          where grouping :: Parser Expression
+          where grouping :: Parser AbstractSyntax
                 grouping = between (char '(') (char ')') expression
 
-abstraction :: Parser Expression
+abstraction :: Parser AbstractSyntax
 abstraction = do
     char '\\' <|> char 'λ' ; optional spaces
     names <- sepEndBy1 identifier spaces
     char '.'
-    body <- expression
-    pure $ foldr Abstraction body names
+    Abstraction names <$> expression
 
-let_ :: Parser Expression
+let_ :: Parser AbstractSyntax
 let_ = do
     try (keyword "let") ; spaces
     defs <- sepBy1 definition (char ';' *> optional spaces)
     keyword "in"
-    body <- expression
-    pure $ foldr (uncurry letExpr) body defs
-  where definition :: Parser (Text, Expression)
+    Let defs <$> expression
+  where definition :: Parser Definition
         definition = do
             name <- identifier ; optional spaces
             char '='
             value <- expression
             pure (name, value)
-        letExpr :: Text -> Expression -> Expression -> Expression
-        letExpr name value body = Application (Abstraction name body) value
 
-expression :: Parser Expression
+expression :: Parser AbstractSyntax
 expression = optional spaces *> (abstraction <|> let_ <|> application <|> variable) <* optional spaces
 
+parseAST :: Text -> Either ParseError AbstractSyntax
+parseAST = parse (expression <* eof) "input"
+
 parseExpression :: Text -> Either ParseError Expression
-parseExpression = parse (expression <* eof) "input"
+parseExpression = fmap ast2expr . parseAST

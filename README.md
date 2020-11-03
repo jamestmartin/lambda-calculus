@@ -9,12 +9,12 @@ Exit the prompt with `Ctrl-c` (or equivalent).
 
 ### Example session
 ```
->> let D = (\x. x x); F = (\f. f (f y)) in D (F (\x. x))
-(y y)
->> let T = (\f x. f (f x)) in (\f x. T (T (T (T T))) f x) (\x. x) y
+>> let D = \x. x x; F = \f. f (f y) in D (F \x. x)
+y y
+>> let T = \f x. f (f x) in (\f x. T (T (T (T T))) f x) (\x. x) y
 y
 >> (\x y z. x y) y
-(\y'. (\z. (y y')))
+λy' z. y y'
 >> ^C
 ```
 

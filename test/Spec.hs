@@ -1,7 +1,7 @@
 import Data.Char (isAlpha)
 import qualified Data.Text as T
 import Generic.Random (genericArbitraryRec, uniform)
-import LambdaCalculus.Expression
+import LambdaCalculus
 import LambdaCalculus.Parser
 import Test.QuickCheck
 import Test.Tasty

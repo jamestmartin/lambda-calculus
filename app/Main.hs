@@ -4,7 +4,7 @@ module Main where
 import Control.Monad (forever)
 import Data.Text
 import qualified Data.Text.IO as TIO
-import LambdaCalculus.Expression (eagerEval)
+import LambdaCalculus (eagerEval)
 import LambdaCalculus.Parser (parseExpression)
 import System.IO (hFlush, stdout)
 

@@ -13,7 +13,9 @@ extra-source-files:
 - README.md
 
 default-extensions:
+- ImportQualifiedPost
 - OverloadedStrings
+- ViewPatterns
 
 dependencies:
 - base >= 4.13 && < 5
