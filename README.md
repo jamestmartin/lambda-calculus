@@ -1,4 +1,4 @@
-# James Martin's Lambda Calculus
+# Lambda Calculus
 This is a simple implementation of the untyped lambda calculus
 with an emphasis on clear, readable Haskell code.
 
@@ -15,13 +15,15 @@ y y
 y
 >> (\x y z. x y) y
 λy' z. y y'
+>> let fix = (\x. x x) \fix f x. f (fix fix f) x; S = \n f x. f (n f x); plus = fix \plus x. x S in plus (\f x. f (f (f x))) (\f x. f (f x)) f x
+f (f (f (f (f x))))
 >> ^C
 ```
 
 ## Notation
 [Conventional Lambda Calculus notation applies](https://en.wikipedia.org/wiki/Lambda_calculus_definition#Notation),
 with the exception that variable names are multiple characters long,
-`\` is used in lieu of `λ` to make it easier to type,
+`\` is permitted in lieu of `λ` to make it easier to type,
 and spaces are used to separate variables rather than commas.
 
 * Variable names are alphanumeric, beginning with a letter.

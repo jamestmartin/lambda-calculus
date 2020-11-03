@@ -55,8 +55,6 @@ main = defaultMain $
   , testGroup "Parser tests"
     [ testGroup "Unit tests"
       [ testCase "identity" $ parseExpression "\\x.x" @?= Right (Abstraction "x" $ Variable "x")
-      -- This syntax is forbidden because it interacts poorly with other syntax, e.g. `let x=in` becoming a valid program.
-      --, testCase "nullary application" $ parseExpression "()" @?= Right (Abstraction "x" $ Variable "x")
       , testCase "unary application" $ parseExpression "(x)" @?= Right (Variable "x")
       , testCase "application shorthand" $ parseExpression "a b c d" @?= Right (Application (Application (Application (Variable "a") (Variable "b")) (Variable "c")) (Variable "d"))
       , testCase "let" $ parseExpression "let x = \\y.y in x" @?= Right (Application (Abstraction "x" (Variable "x")) (Abstraction "y" (Variable "y")))

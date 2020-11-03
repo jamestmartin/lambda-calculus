@@ -9,64 +9,67 @@ import qualified Data.Text as T
 import LambdaCalculus.Expression (Expression, ast2expr)
 import qualified LambdaCalculus.Expression as Expr
 import LambdaCalculus.Parser.AbstractSyntax
-import Text.Parsec hiding (spaces)
-import Text.Parsec.Text
+import Text.Parsec hiding (label, token)
+import Text.Parsec qualified
+import Text.Parsec.Text (Parser)
 import TextShow
+
+label :: String -> Parser a -> Parser a
+label = flip Text.Parsec.label
+
+token :: Char -> Parser ()
+token ch = label [ch] $ char ch *> spaces
 
 keywords :: [Text]
 keywords = ["let", "in"]
 
 -- | A keyword is an exact string which is not part of an identifier.
 keyword :: Text -> Parser ()
-keyword kwd = do
-    void $ string (T.unpack kwd)
-    notFollowedBy letter
+keyword kwd = label (T.unpack kwd) $ do
+    try do
+      string $ T.unpack kwd
+      notFollowedBy letter
+    spaces
 
 -- | An identifier is a sequence of letters which is not a keyword.
 identifier :: Parser Identifier
-identifier = do
+identifier = label "identifier" $ do
     notFollowedBy anyKeyword
-    T.pack <$> many1 letter
-  where anyKeyword = choice $ map (try . keyword) keywords
+    T.pack <$> (many1 letter <* spaces)
+  where anyKeyword = choice $ map keyword keywords
 
 variable :: Parser AbstractSyntax
-variable = Variable <$> identifier
+variable = label "variable" $ Variable <$> identifier
 
-spaces :: Parser ()
-spaces = skipMany1 space
+many2 :: Parser a -> Parser [a]
+many2 p = (:) <$> p <*> many1 p
+
+grouping :: Parser AbstractSyntax
+grouping = label "grouping" $ between (token '(') (token ')') expression
 
 application :: Parser AbstractSyntax
-application = Application <$> sepEndBy1 applicationTerm spaces
+application = Application <$> many2 applicationTerm
   where applicationTerm :: Parser AbstractSyntax
-        applicationTerm = abstraction <|> grouping <|> let_ <|> variable
-          where grouping :: Parser AbstractSyntax
-                grouping = between (char '(') (char ')') expression
+        applicationTerm = abstraction <|> let_ <|> grouping <|> variable
 
 abstraction :: Parser AbstractSyntax
-abstraction = do
-    char '\\' <|> char 'λ' ; optional spaces
-    names <- sepEndBy1 identifier spaces
-    char '.'
-    Abstraction names <$> expression
+abstraction = label "lambda abstraction" $ Abstraction <$> between lambda (token '.') (many1 identifier) <*> expression
+    where lambda = label "lambda" $ (char '\\' <|> char 'λ') *> spaces
 
 let_ :: Parser AbstractSyntax
-let_ = do
-    try (keyword "let") ; spaces
-    defs <- sepBy1 definition (char ';' *> optional spaces)
-    keyword "in"
-    Let defs <$> expression
-  where definition :: Parser Definition
-        definition = do
-            name <- identifier ; optional spaces
-            char '='
+let_ = Let <$> between (keyword "let") (keyword "in") definitions <*> expression
+  where definitions :: Parser [Definition]
+        definitions = flip sepBy1 (token ';') do
+            name <- identifier
+            token '='
             value <- expression
             pure (name, value)
 
 expression :: Parser AbstractSyntax
-expression = optional spaces *> (abstraction <|> let_ <|> application <|> variable) <* optional spaces
+expression = label "expression" $ abstraction <|> let_ <|> try application <|> grouping <|> variable
 
 parseAST :: Text -> Either ParseError AbstractSyntax
-parseAST = parse (expression <* eof) "input"
+parseAST = parse (spaces *> expression <* eof) "input"
 
 parseExpression :: Text -> Either ParseError Expression
 parseExpression = fmap ast2expr . parseAST
