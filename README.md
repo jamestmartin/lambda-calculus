@@ -9,7 +9,7 @@ Exit the prompt with `Ctrl-c` (or equivalent).
 
 ### Example session
 ```
->> let D = (\x. x x) in let F = (\f. f (f y)) in D (F (\x. x))
+>> let D = (\x. x x); F = (\f. f (f y)) in D (F (\x. x))
 (y y)
 >> let T = (\f x. f (f x)) in (\f x. T (T (T (T T))) f x) (\x. x) y
 y
@@ -30,3 +30,4 @@ and spaces are used to separate variables rather than commas.
 * The body of an abstraction or let expression extends as far right as possible: `\x. M N` means `\x.(M N)` and not `(\x. M) N`.
 * A sequence of abstractions may be contracted: `\foo. \bar. \baz. N` may be abbreviated as `\foo bar baz. N`.
 * Variables may be bound using let expressions: `let x = N in M` is syntactic sugar for `(\x. N) M`.
+* Multiple variables may be defined in one let expression: `let x = N; y = O in M`

@@ -60,6 +60,7 @@ main = defaultMain $
       , testCase "unary application" $ parseExpression "(x)" @?= Right (Variable "x")
       , testCase "application shorthand" $ parseExpression "a b c d" @?= Right (Application (Application (Application (Variable "a") (Variable "b")) (Variable "c")) (Variable "d"))
       , testCase "let" $ parseExpression "let x = \\y.y in x" @?= Right (Application (Abstraction "x" (Variable "x")) (Abstraction "y" (Variable "y")))
+      , testCase "multi-let" $ parseExpression "let x = y; y = z in x y" @?= Right (Application (Abstraction "x" (Application (Abstraction "y" (Application (Variable "x") (Variable "y"))) (Variable "z"))) (Variable "y"))
       , testCase "ttttt" $ parseExpression "(\\T f x.(T (T (T (T T)))) f x) (\\f x.f (f x)) (\\x.x) y"
           @?= Right ttttt
       , testGroup "Redundant whitespace"

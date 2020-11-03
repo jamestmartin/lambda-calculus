@@ -19,7 +19,7 @@ data Expression
 instance TextShow Expression where
   showb (Variable var) = fromText var
   showb (Application ef ex) = "(" <> showb ef <> " " <> showb ex <> ")"
-  showb (Abstraction var body) = "(\\" <> fromText var <> ". " <> showb body <> ")"
+  showb (Abstraction var body) = "(λ" <> fromText var <> ". " <> showb body <> ")"
 
 instance Show Expression where
   show = T.unpack . showt
