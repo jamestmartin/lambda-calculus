@@ -1,0 +1,22 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@v2
+
+    - name: Install latest Haskell Stack
+      uses: actions/setup-haskell@v1.1
+      with:
+        enable-stack: true
+
+    - name: Build
+      run: stack build
+      
+    - name: Test
+      run: stack test
