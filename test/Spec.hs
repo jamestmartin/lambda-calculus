@@ -44,15 +44,25 @@ ttttt = Application (Application (Application f t) (Abstraction "x" (Variable "x
                         (Variable "f"))
           (Variable "x")
 
-prop_parseExpression_inverse :: Expression -> Bool
-prop_parseExpression_inverse expr = Right expr == parseExpression (showt expr)
+-- | A simple divergent expression.
+omega :: Expression
+omega = Application x x
+  where x = Abstraction "x" (Application (Variable "x") (Variable "x"))
+
+cc1 :: Expression
+cc1 = Application (Variable "callcc") (Abstraction "k" (Application omega (Application (Variable "k") (Variable "z"))))
+
+cc2 :: Expression
+cc2 = Application (Variable "y") (Application (Variable "callcc") (Abstraction "k" (Application (Variable "z") (Application (Variable "k") (Variable "x")))))
 
 main :: IO ()
 main = defaultMain $
   testGroup "Tests"
   [ testGroup "Evaluator tests"
-    [ testCase "DFI" $ eagerEval dfi @?= Application (Variable "y") (Variable "y")
-    , testCase "ttttt" $ eagerEval ttttt @?= Variable "y"
+    [ testCase "capture test 1: DFI" $ eval dfi @?= Application (Variable "y") (Variable "y")
+    , testCase "capture test 2: ttttt" $ eval ttttt @?= Variable "y"
+    , testCase "invoking a continuation replaces the current continuation" $ eval cc1 @?= Variable "z"
+    , testCase "callcc actually captures the current continuation" $ eval cc2 @?= Application (Variable "y") (Variable "x")
     ]
   , testGroup "Parser tests"
     [ testGroup "Unit tests"
@@ -70,6 +80,5 @@ main = defaultMain $
         , testCase "around let" $ parseExpression "  let x=(y)in x  " @?= Right (Application (Abstraction "x" (Variable "x")) (Variable "y"))
         ]
       ]
-    , testProperty "parseExpression is the left inverse of show" prop_parseExpression_inverse
     ]
   ]

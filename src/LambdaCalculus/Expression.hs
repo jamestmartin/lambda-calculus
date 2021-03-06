@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 module LambdaCalculus.Expression
-  ( Expression (Variable, Application, Abstraction)
+  ( Expression (..), foldExpr
   , ast2expr, expr2ast
   , pattern Lets, pattern Abstractions, pattern Applications
   , viewLet, viewAbstraction, viewApplication
@@ -30,7 +30,23 @@ data Expression
   | Application Expression Expression
   -- | Lambda abstraction: `(λx. e)`.
   | Abstraction Text Expression
+  -- | A continuation. This is identical to a lambda abstraction,
+  -- with the exception that it performs the side-effect of
+  -- deleting the current continuation.
+  --
+  -- Continuations do not have any corresponding surface-level syntax.
+  | Continuation Text Expression
   deriving (Eq, Generic)
+
+foldExpr :: (Text -> a) -> (a -> a -> a) -> (Text -> a -> a) -> Expression -> a
+foldExpr varf appf absf = foldExpr'
+  where
+    foldExpr' (Variable name) = varf name
+    foldExpr' (Application ef ex) = appf (foldExpr' ef) (foldExpr' ex)
+    foldExpr' (Abstraction name body) = absf name (foldExpr' body)
+    -- This isn't technically correct, but it's good enough for every place I use this.
+    -- I'll figure out a proper solution later, or possibly just rip out this function.
+    foldExpr' (Continuation name body) = absf name (foldExpr' body)
 
 -- | A naive implementation of 'show', which does not take advantage of any syntactic sugar
 -- and always emits optional parentheses.
@@ -38,6 +54,7 @@ basicShow :: Expression -> Builder
 basicShow (Variable var) = fromText var
 basicShow (Application ef ex) = "(" <> showb ef <> " " <> showb ex <> ")"
 basicShow (Abstraction var body) = "(λ" <> fromText var <> ". " <> showb body <> ")"
+basicShow (Continuation var body) = "(Λ" <> fromText var <> ". " <> showb body <> ")"
 
 -- | Convert from an abstract syntax tree to an expression.
 ast2expr :: AbstractSyntax -> Expression
@@ -70,7 +87,7 @@ viewAbstraction x = ([], x)
 pattern Applications :: [Expression] -> Expression
 pattern Applications exprs <- (viewApplication -> (exprs@(_:_:_)))
 
-{-# COMPLETE Abstractions, Applications, Variable :: Expression #-}
+{-# COMPLETE Abstractions, Applications, Continuation, Variable :: Expression #-}
 
 viewApplication :: Expression -> [Expression]
 viewApplication (Application ef ex) = ex : viewApplication ef
@@ -84,6 +101,7 @@ expr2ast (Lets defs body) = AST.Let (fromList $ map (second expr2ast) defs) $ ex
 expr2ast (Abstractions names body) = AST.Abstraction (fromList names) $ expr2ast body
 expr2ast (Applications exprs) = AST.Application $ fromList $ map expr2ast $ reverse exprs
 expr2ast (Variable name) = AST.Variable name
+expr2ast (Continuation _ body) = AST.Abstraction ("!" :| []) (expr2ast body)
 
 instance TextShow Expression where
   showb = showb . expr2ast
