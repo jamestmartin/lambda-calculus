@@ -10,8 +10,8 @@ jobs:
     - name: Checkout sources
       uses: actions/checkout@v2
 
-    - name: Install latest Haskell Stack
-      uses: actions/setup-haskell@v1.1
+    - name: Install Haskell toolchain
+      uses: haskell/actions/setup@v1
       with:
         enable-stack: true
 

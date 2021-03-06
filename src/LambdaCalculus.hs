@@ -1,7 +1,7 @@
 module LambdaCalculus
-    ( module LambdaCalculus.Expression
-    , eagerEval, lazyEval
-    ) where
+  ( module LambdaCalculus.Expression
+  , eagerEval, lazyEval
+  ) where
 
 import Data.List (elemIndex, find)
 import Data.Maybe (fromJust)
@@ -38,47 +38,51 @@ closed = HS.null . freeVariables
 -- i.e. one can be converted to the other using only alpha-conversion.
 alphaEquivalent :: Expression -> Expression -> Bool
 alphaEquivalent = alphaEquivalent' [] []
-  where alphaEquivalent' :: [Text] -> [Text] -> Expression -> Expression -> Bool
-        alphaEquivalent' ctx1 ctx2 (Variable v1) (Variable v2)
-          -- Two variables are alpha-equivalent if they are bound in the same location.
-          = bindingSite ctx1 v1 == bindingSite ctx2 v2
-        alphaEquivalent' ctx1 ctx2 (Application ef1 ex1) (Application ef2 ex2)
-          -- Two applications are alpha-equivalent if their components are alpha-equivalent.
-          = alphaEquivalent' ctx1 ctx2 ef1 ef2
-          && alphaEquivalent' ctx1 ctx2 ex1 ex2
-        alphaEquivalent' ctx1 ctx2 (Abstraction v1 b1) (Abstraction v2 b2)
-          -- Two abstractions are alpha-equivalent if their bodies are alpha-equivalent.
-          = alphaEquivalent' (v1 : ctx1) (v2 : ctx2) b1 b2
+  where
+    alphaEquivalent' :: [Text] -> [Text] -> Expression -> Expression -> Bool
+    alphaEquivalent' ctx1 ctx2 (Variable v1) (Variable v2)
+      -- Two variables are alpha-equivalent if they are bound in the same location.
+      = bindingSite ctx1 v1 == bindingSite ctx2 v2
+    alphaEquivalent' ctx1 ctx2 (Application ef1 ex1) (Application ef2 ex2)
+      -- Two applications are alpha-equivalent if their components are alpha-equivalent.
+      = alphaEquivalent' ctx1 ctx2 ef1 ef2
+      && alphaEquivalent' ctx1 ctx2 ex1 ex2
+    alphaEquivalent' ctx1 ctx2 (Abstraction v1 b1) (Abstraction v2 b2)
+      -- Two abstractions are alpha-equivalent if their bodies are alpha-equivalent.
+      = alphaEquivalent' (v1 : ctx1) (v2 : ctx2) b1 b2
+    alphaEquivalent' _ _ _ _ = False
 
-        -- | The binding site of a variable is either the index of its binder
-        -- or, if it is unbound, the name of the free variable.
-        bindingSite :: [Text] -> Text -> Either Text Int
-        bindingSite ctx var = maybeToRight var $ var `elemIndex` ctx
-          where maybeToRight :: b -> Maybe a -> Either b a
-                maybeToRight default_ = maybe (Left default_) Right
+    -- | The binding site of a variable is either the index of its binder
+    -- or, if it is unbound, the name of the free variable.
+    bindingSite :: [Text] -> Text -> Either Text Int
+    bindingSite ctx var = maybeToRight var $ var `elemIndex` ctx
+      where maybeToRight :: b -> Maybe a -> Either b a
+            maybeToRight default_ = maybe (Left default_) Right
 
 -- | Substitution is the process of replacing all free occurrences of a variable in one expression with another expression.
 substitute :: Text -> Expression -> Expression -> Expression
 substitute var1 value unmodified@(Variable var2)
-  | var1 == var2 = value
+    | var1 == var2 = value
   | otherwise = unmodified
 substitute var value (Application ef ex)
   = Application (substitute var value ef) (substitute var value ex)
 substitute var1 value unmodified@(Abstraction var2 body)
   | var1 == var2 = unmodified
   | otherwise = Abstraction var2' $ substitute var1 value $ alphaConvert var2 var2' body
-  where var2' :: Text
-        var2' = escapeName (freeVariables value) var2
+  where
+    var2' :: Text
+    var2' = escapeName (freeVariables value) var2
 
-        alphaConvert :: Text -> Text -> Expression -> Expression
-        alphaConvert oldName newName expr = substitute oldName (Variable newName) expr
-        -- | Generate a new name which isn't present in the set, based on the old name.
-        escapeName :: HashSet Text -> Text -> Text
-        escapeName env name = fromJust $ find (not . free) names
-          where names :: [Text]
-                names = name : map (`T.snoc` '\'') names
-                free :: Text -> Bool
-                free = (`HS.member` env)
+    alphaConvert :: Text -> Text -> Expression -> Expression
+    alphaConvert oldName newName expr = substitute oldName (Variable newName) expr
+    -- | Generate a new name which isn't present in the set, based on the old name.
+    escapeName :: HashSet Text -> Text -> Text
+    escapeName env name = fromJust $ find (not . free) names
+      where names :: [Text]
+            names = name : map (`T.snoc` '\'') names
+
+            free :: Text -> Bool
+            free = (`HS.member` env)
 
 -- | Returns True if the top-level expression is reducible by beta-reduction.
 betaRedex :: Expression -> Bool
@@ -110,22 +114,25 @@ whnf (Application (Abstraction _ _) _) = False
 whnf (Abstraction var1 (Application fe (Variable var2)))
   = var1 /= var2 || var1 `freeIn` fe
 whnf (Application ef _) = whnf ef
+whnf _ = True
 
 eval :: (Expression -> Expression) -> Expression -> Expression
 eval strategy = eval'
-  where eval' :: Expression -> Expression
-        eval' (Application ef ex) =
-          case ef' of
-            -- Beta-reduction
-            Abstraction var body -> eval' $ substitute var ex' body
-            _ -> Application ef' ex'
-          where ef' = eval' ef
-                ex' = strategy ex
-        eval' unmodified@(Abstraction var1 (Application ef (Variable var2)))
-          -- Eta-reduction
-          | var1 == var2 && not (var1 `freeIn` ef) = eval' ef
-          | otherwise = unmodified
-        eval' x = x
+  where
+    eval' :: Expression -> Expression
+    eval' (Application ef ex) =
+      case ef' of
+        -- Beta-reduction
+        Abstraction var body -> eval' $ substitute var ex' body
+        _ -> Application ef' ex'
+      where
+        ef' = eval' ef
+        ex' = strategy ex
+    eval' unmodified@(Abstraction var1 (Application ef (Variable var2)))
+      -- Eta-reduction
+      | var1 == var2 && not (var1 `freeIn` ef) = eval' ef
+      | otherwise = unmodified
+    eval' x = x
 
 -- | Reduce an expression to normal form.
 eagerEval :: Expression -> Expression

@@ -1,5 +1,3 @@
-# Nightly is required for the ImportQualifiedPost extension from GHC 8.10.
-# An LTS resolver will be used once GHC 8.10 is in an LTS.
-resolver: nightly-2020-11-03
+resolver: lts-17.5
 packages:
 - .

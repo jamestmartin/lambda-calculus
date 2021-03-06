@@ -15,18 +15,38 @@ extra-source-files:
 default-extensions:
 - BlockArguments
 - ImportQualifiedPost
+- LambdaCase
 - OverloadedStrings
+- PatternSynonyms
 - ViewPatterns
 
 dependencies:
-- base >= 4.13 && < 5
+- base >= 4.14 && < 5
 - parsec >= 3.1 && < 4
 - text >= 1.2 && < 2
-- text-show >= 3.8 && < 4
-- unordered-containers >= 0.2.10 && < 0.3
+- text-show >= 3.9 && < 4
+- unordered-containers >= 0.2.13 && < 0.3
 
 library:
   source-dirs: src
+  ghc-options:
+  - -Weverything
+  # Useless Safe Haskell warnings
+  - -Wno-missing-safe-haskell-mode
+  - -Wno-unsafe
+  - -Wno-safe
+  # Other stupid warnings
+  - -Wno-implicit-prelude
+  - -Wno-missing-deriving-strategies
+  # Less stupid warnings, but I still don't care
+  - -Wno-unused-do-bind
+  - -Wno-all-missed-specialisations
+  # Explicit import lists are generally a good thing, but I don't want them
+  # in certain cases (e.g. importing my own modules, task-specific modules like the parser).
+  - -Wno-missing-import-lists
+  # I intentionally include unused top-level bindings
+  # as a way of documenting and explaining concepts.
+  - -Wno-unused-top-binds
 
 executables:
   jtm-lambda-calculus:
@@ -50,7 +70,7 @@ tests:
     dependencies:
     - jtm-lambda-calculus
     - generic-random >= 1.2 && < 2
-    - QuickCheck >= 2.13 && < 3
+    - QuickCheck >= 2.14 && < 3
     - tasty >= 1.2 && < 2
     - tasty-hunit >= 0.10 && < 0.11
     - tasty-quickcheck >= 0.10.1 && < 0.11

@@ -23,16 +23,18 @@ instance Arbitrary T.Text where
 -- This should evaluate to `y y`.
 dfi :: Expression
 dfi = Application d (Application f i)
-  where d = Abstraction "x" $ Application (Variable "x") (Variable "x")
-        f = Abstraction "f" $ Application (Variable "f") (Application (Variable "f") (Variable "y"))
-        i = Abstraction "x" $ Variable "x"
+  where
+    d = Abstraction "x" $ Application (Variable "x") (Variable "x")
+    f = Abstraction "f" $ Application (Variable "f") (Application (Variable "f") (Variable "y"))
+    i = Abstraction "x" $ Variable "x"
 
 -- This should evalaute to `y`.
 ttttt :: Expression
 ttttt = Application (Application (Application f t) (Abstraction "x" (Variable "x"))) (Variable "y")
-  where t = Abstraction "f" $ Abstraction "x" $
+  where
+    t = Abstraction "f" $ Abstraction "x" $
           Application (Variable "f") (Application (Variable "f") (Variable "x"))
-        f = Abstraction "T" $ Abstraction "f" $ Abstraction "x" $
+    f = Abstraction "T" $ Abstraction "f" $ Abstraction "x" $
           Application (Application
                         (Application (Variable "T")
                          (Application (Variable "T")
