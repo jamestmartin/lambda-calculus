@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 module LambdaCalculus.Expression
   ( Expression (..), foldExpr
   , ast2expr, expr2ast
@@ -19,7 +18,6 @@ import Data.Bifunctor (first, second)
 import Data.List.NonEmpty (NonEmpty ((:|)), fromList, toList)
 import Data.Text (Text)
 import Data.Text qualified as T
-import GHC.Generics (Generic)
 import LambdaCalculus.Parser.AbstractSyntax (AbstractSyntax)
 import LambdaCalculus.Parser.AbstractSyntax qualified as AST
 import TextShow (Builder, fromText, TextShow, showb, showt)
@@ -36,7 +34,7 @@ data Expression
   --
   -- Continuations do not have any corresponding surface-level syntax.
   | Continuation Text Expression
-  deriving (Eq, Generic)
+  deriving Eq
 
 foldExpr :: (Text -> a) -> (a -> a -> a) -> (Text -> a -> a) -> Expression -> a
 foldExpr varf appf absf = foldExpr'
@@ -85,7 +83,7 @@ viewAbstraction x = ([], x)
 
 -- | View left-nested applications as a list.
 pattern Applications :: [Expression] -> Expression
-pattern Applications exprs <- (viewApplication -> (exprs@(_:_:_)))
+pattern Applications exprs <- (viewApplication -> exprs@(_:_:_))
 
 {-# COMPLETE Abstractions, Applications, Continuation, Variable :: Expression #-}
 

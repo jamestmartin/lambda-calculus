@@ -45,15 +45,13 @@ library:
   # Explicit import lists are generally a good thing, but I don't want them
   # in certain cases (e.g. importing my own modules, task-specific modules like the parser).
   - -Wno-missing-import-lists
-  # I intentionally include unused top-level bindings
-  # as a way of documenting and explaining concepts.
-  - -Wno-unused-top-binds
 
 executables:
   jtm-lambda-calculus:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
+    - -Wall
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
@@ -65,13 +63,11 @@ tests:
     main: Spec.hs
     source-dirs: test
     ghc-options:
+    - -Wall
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
     - jtm-lambda-calculus
-    - generic-random >= 1.2 && < 2
-    - QuickCheck >= 2.14 && < 3
     - tasty >= 1.2 && < 2
     - tasty-hunit >= 0.10 && < 0.11
-    - tasty-quickcheck >= 0.10.1 && < 0.11

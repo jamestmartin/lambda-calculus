@@ -1,19 +1,7 @@
-import Data.Char (isAlpha)
-import qualified Data.Text as T
-import Generic.Random (genericArbitraryRec, uniform)
 import LambdaCalculus
 import LambdaCalculus.Parser
-import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck
-import TextShow (showt)
-
-instance Arbitrary Expression where
-  arbitrary = genericArbitraryRec uniform
-
-instance Arbitrary T.Text where
-  arbitrary = T.pack <$> listOf1 (elements $ ['A'..'Z'] ++ ['a'..'z'])
 
 -- These are terms which have complex reduction steps and
 -- are likely to catch bugs in the substitution function, if there are any.
