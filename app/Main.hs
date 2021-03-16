@@ -1,8 +1,8 @@
-module Main where
+module Main (main) where
 
 import Control.Monad (forever)
 import Data.Text
-import qualified Data.Text.IO as TIO
+import Data.Text.IO qualified as TIO
 import LambdaCalculus (eval)
 import LambdaCalculus.Parser (parseExpression)
 import System.IO (hFlush, stdout)

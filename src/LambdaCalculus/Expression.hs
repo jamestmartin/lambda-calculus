@@ -1,9 +1,8 @@
 module LambdaCalculus.Expression
-  ( Expression (..), foldExpr
+  ( Expression (..), ExpressionF (..)
   , ast2expr, expr2ast
   , pattern Lets, pattern Abstractions, pattern Applications
   , viewLet, viewAbstraction, viewApplication
-  , basicShow
   ) where
 
 -- The definition of Expression is in its own file because:
@@ -14,13 +13,16 @@ module LambdaCalculus.Expression
 -- * I don't want to clutter the module focusing on the actual evaluation
 --   with all of these irrelevant conversion operators.
 
-import Data.Bifunctor (first, second)
+import Data.Bifunctor (first)
+import Data.Functor.Foldable (ana, cata)
+import Data.Functor.Foldable.TH (makeBaseFunctor)
+import Data.List (foldl1')
 import Data.List.NonEmpty (NonEmpty ((:|)), fromList, toList)
 import Data.Text (Text)
 import Data.Text qualified as T
 import LambdaCalculus.Parser.AbstractSyntax (AbstractSyntax)
 import LambdaCalculus.Parser.AbstractSyntax qualified as AST
-import TextShow (Builder, fromText, TextShow, showb, showt)
+import TextShow (TextShow, showb, showt)
 
 data Expression
   = Variable Text
@@ -33,37 +35,22 @@ data Expression
   -- deleting the current continuation.
   --
   -- Continuations do not have any corresponding surface-level syntax.
-  | Continuation Text Expression
+  | Continuation Expression
   deriving Eq
 
-foldExpr :: (Text -> a) -> (a -> a -> a) -> (Text -> a -> a) -> Expression -> a
-foldExpr varf appf absf = foldExpr'
-  where
-    foldExpr' (Variable name) = varf name
-    foldExpr' (Application ef ex) = appf (foldExpr' ef) (foldExpr' ex)
-    foldExpr' (Abstraction name body) = absf name (foldExpr' body)
-    -- This isn't technically correct, but it's good enough for every place I use this.
-    -- I'll figure out a proper solution later, or possibly just rip out this function.
-    foldExpr' (Continuation name body) = absf name (foldExpr' body)
-
--- | A naive implementation of 'show', which does not take advantage of any syntactic sugar
--- and always emits optional parentheses.
-basicShow :: Expression -> Builder
-basicShow (Variable var) = fromText var
-basicShow (Application ef ex) = "(" <> showb ef <> " " <> showb ex <> ")"
-basicShow (Abstraction var body) = "(λ" <> fromText var <> ". " <> showb body <> ")"
-basicShow (Continuation var body) = "(Λ" <> fromText var <> ". " <> showb body <> ")"
+makeBaseFunctor ''Expression
 
 -- | Convert from an abstract syntax tree to an expression.
 ast2expr :: AbstractSyntax -> Expression
-ast2expr (AST.Variable name) = Variable name
-ast2expr (AST.Application (x :| [])) = ast2expr x
-ast2expr (AST.Application xs) = foldl1 Application $ map ast2expr (toList xs)
-ast2expr (AST.Abstraction names body) = foldr Abstraction (ast2expr body) names
-ast2expr (AST.Let defs body) = foldr (uncurry letExpr . second ast2expr) (ast2expr body) defs
-  where
-    letExpr :: Text -> Expression -> Expression -> Expression
-    letExpr name val body' = Application (Abstraction name body') val
+ast2expr = cata \case
+  AST.VariableF name -> Variable name
+  AST.ApplicationF es -> case es of
+    x :| [] -> x
+    xs -> foldl1' Application (toList xs)
+  AST.AbstractionF names body -> foldr Abstraction body (toList names)
+  AST.LetF defs body ->
+    let letExpr name val body' = Application (Abstraction name body') val
+    in foldr (uncurry letExpr) body defs
 
 -- | View nested applications of abstractions as a list.
 pattern Lets :: [(Text, Expression)] -> Expression -> Expression
@@ -88,18 +75,19 @@ pattern Applications exprs <- (viewApplication -> exprs@(_:_:_))
 {-# COMPLETE Abstractions, Applications, Continuation, Variable :: Expression #-}
 
 viewApplication :: Expression -> [Expression]
-viewApplication (Application ef ex) = ex : viewApplication ef
+viewApplication (Application ef ex) = viewApplication ef ++ [ex]
 viewApplication x = [x]
 
 -- | Convert from an expression to an abstract syntax tree.
 --
 -- This function will use let, and applications and abstractions of multiple values when possible.
 expr2ast :: Expression -> AbstractSyntax
-expr2ast (Lets defs body) = AST.Let (fromList $ map (second expr2ast) defs) $ expr2ast body
-expr2ast (Abstractions names body) = AST.Abstraction (fromList names) $ expr2ast body
-expr2ast (Applications exprs) = AST.Application $ fromList $ map expr2ast $ reverse exprs
-expr2ast (Variable name) = AST.Variable name
-expr2ast (Continuation _ body) = AST.Abstraction ("!" :| []) (expr2ast body)
+expr2ast = ana \case
+  Lets defs body -> AST.LetF (fromList defs) body
+  Abstractions names body -> AST.AbstractionF (fromList names) body
+  Applications exprs -> AST.ApplicationF $ fromList exprs
+  Continuation body -> AST.AbstractionF ("!" :| []) body
+  Variable name -> AST.VariableF name
 
 instance TextShow Expression where
   showb = showb . expr2ast

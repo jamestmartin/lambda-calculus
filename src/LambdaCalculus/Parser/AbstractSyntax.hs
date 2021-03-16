@@ -1,9 +1,11 @@
 module LambdaCalculus.Parser.AbstractSyntax
-  ( AbstractSyntax (..), Definition, Identifier
+  ( AbstractSyntax (..), AbstractSyntaxF (..), Definition, Identifier
   ) where
 
-import Data.Bifunctor (first)
-import Data.List.NonEmpty (NonEmpty ((:|)), fromList, toList)
+import Data.Functor.Base (NonEmptyF (NonEmptyF))
+import Data.Functor.Foldable (cata)
+import Data.Functor.Foldable.TH (makeBaseFunctor)
+import Data.List.NonEmpty (NonEmpty, toList)
 import Data.Text (Text)
 import Data.Text qualified as T
 import TextShow (Builder, TextShow, showb, showt, toText, fromText)
@@ -38,36 +40,57 @@ data AbstractSyntax
 type Definition = (Identifier, AbstractSyntax)
 type Identifier = Text
 
+makeBaseFunctor ''AbstractSyntax
+
 -- I'm surprised this isn't in base somewhere.
 unsnoc :: NonEmpty a -> ([a], a)
-unsnoc (x :| []) = ([], x)
-unsnoc (x :| xs) = first (x :) (unsnoc (fromList xs))
+unsnoc = cata \case
+  NonEmptyF x' Nothing -> ([], x')
+  NonEmptyF x (Just (xs, x')) -> (x : xs, x')
+
+data SyntaxType
+  -- | Ambiguous syntax is not necessarily finite and not guaranteed to consume any input.
+  = Ambiguous
+  -- | Block syntax is not necessarily finite but is guaranteed to consume input.
+  | Block
+  -- | Unambiguous syntax is finite and guaranteed to consume input.
+  | Finite
+type Tagged a = (SyntaxType, a)
+
+tag :: SyntaxType -> a -> Tagged a
+tag = (,)
+
+group :: Builder -> Builder
+group x = "(" <> x <> ")"
+
+-- | An unambiguous context has a marked beginning and end.
+unambiguous :: Tagged Builder -> Builder
+unambiguous (_, t) = t
+
+-- | A final context has a marked end but no marked beginning,
+-- so we provide a grouper when a beginning marker is necessary.
+final :: Tagged Builder -> Builder
+final (Ambiguous, t) = group t
+final (_, t) = t
+
+-- | An ambiguous context has neither a marked end nor marked beginning,
+-- so we provide a grouper when an ending marker is necessary.
+ambiguous :: Tagged Builder -> Builder
+ambiguous (Finite, t) = t
+ambiguous (_, t) = group t
 
 instance TextShow AbstractSyntax where
-  showb = unambiguous
-    where
-      -- Parentheses are often optional to the parser, but not in every context.
-      -- The `unambigous` printer is used in contexts where parentheses are optional, and does not include them;
-      -- the `ambiguous` printer is used when omitting parentheses could result in an incorrect parse.
-      unambiguous, ambiguous :: AbstractSyntax -> Builder
-      unambiguous (Variable name) = fromText name
-      unambiguous (Application (unsnoc -> (es, final))) = foldr (\e es' -> ambiguous e <> " " <> es') final' es
-        where
-          final' = case final of
-            Application _ -> ambiguous final
-            _             -> unambiguous final
-      unambiguous (Abstraction names body) = "λ" <> names' <> ". " <> unambiguous body
-        where names' = fromText (T.intercalate " " $ toList names)
-      unambiguous (Let defs body) = "let " <> defs' <> " in " <> unambiguous body
-        where
-          defs' = fromText (T.intercalate "; " $ map (toText . showDef) $ toList defs)
-
-          showDef :: Definition -> Builder
-          showDef (name, val) = fromText name <> " = " <> unambiguous val
-
-      -- | Adds a grouper if omitting it could result in ambiguous syntax.)
-      ambiguous e@(Variable _) = unambiguous e
-      ambiguous e = "(" <> unambiguous e <> ")"
+  showb = snd . cata \case
+    VariableF name -> tag Finite $ fromText name
+    ApplicationF (unsnoc -> (es, efinal)) -> tag Ambiguous $ foldr (\e es' -> ambiguous e <> " " <> es') (final efinal) es
+    AbstractionF names body -> tag Block $
+      let names' = fromText (T.intercalate " " $ toList names)
+      in "λ" <> names' <> ". " <> unambiguous body
+    LetF defs body -> tag Block $
+      let
+        showDef (name, val) = fromText name <> " = " <> unambiguous val
+        defs' = fromText (T.intercalate "; " $ map (toText . showDef) $ toList defs)
+      in "let " <> defs' <> " in " <> unambiguous body
 
 instance Show AbstractSyntax where
   show = T.unpack . showt

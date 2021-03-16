@@ -14,16 +14,24 @@ extra-source-files:
 
 default-extensions:
 - BlockArguments
+- FlexibleContexts
 - ImportQualifiedPost
 - LambdaCase
 - OverloadedStrings
 - PatternSynonyms
 - ViewPatterns
+# Required for use of recursion-schemes
+- DeriveFoldable
+- DeriveFunctor
+- DeriveTraversable
+- TemplateHaskell
+- TypeFamilies
 
 dependencies:
 - base >= 4.14 && < 5
 - mtl >= 2.2 && < 3
 - parsec >= 3.1 && < 4
+- recursion-schemes >= 5.2 && < 6
 - text >= 1.2 && < 2
 - text-show >= 3.9 && < 4
 - unordered-containers >= 0.2.13 && < 0.3
@@ -42,6 +50,7 @@ library:
   # Less stupid warnings, but I still don't care
   - -Wno-unused-do-bind
   - -Wno-all-missed-specialisations
+  - -Wno-missing-local-signatures
   # Explicit import lists are generally a good thing, but I don't want them
   # in certain cases (e.g. importing my own modules, task-specific modules like the parser).
   - -Wno-missing-import-lists
