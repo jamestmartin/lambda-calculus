@@ -44,8 +44,6 @@ This interpreter has preliminary support for
 However, it has not been thoroughly tested.
 
 To use it, simply apply the variable `callcc` like you would a function, e.g. `(callcc (\k. ...))`.
-`callcc` is not a normal variable and cannot be shadowed;
-`\callcc. callcc` is *not* the identity function, it *ignores* its argument and then returns the *operator* `callcc`.
 
 Continuations are printed as `λ!. ... ! ...`, like a lambda abstraction
 with an argument named `!` which is used exactly once;

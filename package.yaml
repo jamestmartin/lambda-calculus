@@ -56,8 +56,6 @@ library:
   # Less stupid warnings, but I still don't care
   - -Wno-all-missed-specialisations
   - -Wno-missing-local-signatures
-  # This is a good warning, but often polymorphism isn't actually needed.
-  - -Wno-monomorphism-restriction
   # Explicit import lists are generally a good thing, but I don't want them
   # in certain cases (e.g. importing my own modules, task-specific modules like the parser).
   - -Wno-missing-import-lists

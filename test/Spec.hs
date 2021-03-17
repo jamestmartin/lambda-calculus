@@ -39,10 +39,10 @@ omega = App x x
   where x = Abs "x" (App (Var "x") (Var "x"))
 
 cc1 :: EvalExpr
-cc1 = App (Var "callcc") (Abs "k" (App omega (App (Var "k") (Var "z"))))
+cc1 = App CallCC (Abs "k" (App omega (App (Var "k") (Var "z"))))
 
 cc2 :: EvalExpr
-cc2 = App (Var "y") (App (Var "callcc") (Abs "k" (App (Var "z") (App (Var "k") (Var "x")))))
+cc2 = App (Var "y") (App CallCC (Abs "k" (App (Var "z") (App (Var "k") (Var "x")))))
 
 main :: IO ()
 main = defaultMain $

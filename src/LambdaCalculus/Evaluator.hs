@@ -1,8 +1,8 @@
 module LambdaCalculus.Evaluator
   ( Expr (..), ExprF (..), VoidF, Text
   , Eval, EvalExpr, EvalX, EvalXF (..)
-  , pattern AppFE, pattern Cont, pattern ContF
-  , eval, traceEval
+  , pattern AppFE, pattern Cont, pattern ContF, pattern CallCC, pattern CallCCF
+  , eval, traceEval, substitute, alphaConvert
   ) where
 
 import LambdaCalculus.Evaluator.Base
@@ -21,18 +21,17 @@ import Data.Void (Void, absurd)
 -- | Free variables are variables which are present in an expression but not bound by any abstraction.
 freeVars :: EvalExpr -> HashSet Text
 freeVars = cata \case
-  VarF name -> HS.singleton name
-  AppFE e1 e2 -> HS.union e1 e2
-  AbsF n e -> HS.delete n e
-  ContF e -> HS.delete "!" e
+  AbsF n e -> HS.delete  n  e
+  ContF e  -> HS.delete "!" e
+  VarF n   -> HS.singleton n
+  e -> foldr HS.union HS.empty e
 
 -- | Bound variables are variables which are bound by any form of abstraction in an expression.
 boundVars :: EvalExpr -> HashSet Text
 boundVars = cata \case
-  VarF _ -> HS.empty
-  AppFE e1 e2 -> HS.union e1 e2
-  AbsF n e -> HS.insert n e
-  ContF e -> HS.insert "!" e
+  AbsF n e -> HS.insert  n  e
+  ContF e  -> HS.insert "!" e
+  e -> foldr HS.union HS.empty e
 
 -- | Vars that occur anywhere in an experession, bound or free.
 usedVars :: EvalExpr -> HashSet Text
@@ -88,16 +87,17 @@ unsafeSubstitute var val = para \case
     | ContF      _ <- e', var == "!"  -> unmodified e'
     | otherwise -> substituted e'
   where
+    substituted, unmodified :: EvalExprF (EvalExpr, EvalExpr) -> EvalExpr
     substituted = embed . fmap snd
     unmodified  = embed . fmap fst
 
 isReducible :: EvalExpr -> Bool
 isReducible = snd . cata \case
-  AppF ctr (Identity args) -> eliminator ctr [args]
-  VarF "callcc"            -> constructor
-  AbsF _ _                 -> constructor
-  ContF _                  -> constructor
-  VarF _                   -> constant
+  AppFE ctr args -> eliminator ctr [args]
+  CallCCF        -> constructor
+  AbsF _ _       -> constructor
+  ContF _        -> constructor
+  VarF _         -> constant
   where
     -- | Constants are irreducible in any context.
     constant = (False, False)
@@ -150,8 +150,7 @@ evaluatorStep = \case
           put []
           pure $ substitute "!" ex body
         -- capture the current continuation if requested...
-        Var "callcc" -> do
-          -- Don't worry about variable capture here for now.
+        CallCC -> do
           k <- gets $ continue (Var "!")
           pure $ App ex (Cont k)
         -- otherwise the value is irreducible and we can continue evaluation.
