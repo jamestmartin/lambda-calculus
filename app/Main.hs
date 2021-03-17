@@ -1,19 +1,22 @@
 module Main (main) where
 
+import LambdaCalculus
+
 import Control.Monad (forever)
-import Data.Text
-import Data.Text.IO qualified as TIO
-import LambdaCalculus (eval)
-import LambdaCalculus.Parser (parseExpression)
+import Data.Text (pack)
+import Data.Text.IO
+import Prelude hiding (putStr, putStrLn, getLine)
 import System.IO (hFlush, stdout)
 
 prompt :: Text -> IO Text
 prompt text = do
-  TIO.putStr text
+  putStr text
   hFlush stdout
-  TIO.getLine
+  getLine
 
 main :: IO ()
-main = forever $ parseExpression <$> prompt ">> " >>= \case
-  Left parseError -> putStrLn $ "Parse error: " ++ show parseError
-  Right expr -> print $ eval expr
+main = forever $ parseEval <$> prompt ">> " >>= \case
+  Left parseError -> putStrLn $ "Parse error: " <> pack (show parseError)
+  -- TODO: Support choosing which version to use at runtime.
+  Right expr -> putStrLn $ unparseEval $ eval expr
+  --Right expr -> mapM_ (putStrLn . unparseEval) $ snd $ traceEval expr

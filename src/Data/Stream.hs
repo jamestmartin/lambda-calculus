@@ -1,9 +1,12 @@
-module Data.Stream (Stream (Cons), filter, fromList) where
+module Data.Stream
+  ( Stream (..)
+  , filter, iterate, fromList
+  ) where
 
 import Data.Functor.Foldable (Base, Corecursive, Recursive, embed, project, ana)
-import Prelude hiding (filter, head, tail)
+import Prelude hiding (filter, iterate, head, tail)
 
-data Stream a = Cons a (Stream a)
+data Stream a = Cons { head :: a, tail :: Stream a }
 
 type instance Base (Stream a) = (,) a
 
@@ -18,6 +21,9 @@ filter p = ana \case
   Cons x xs
     | p x -> (x, xs)
     | otherwise -> project xs
+
+iterate :: (a -> a) -> a -> Stream a
+iterate f = ana \x -> (x, f x)
 
 fromList :: [a] -> Stream a
 fromList = ana coalg

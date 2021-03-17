@@ -14,18 +14,25 @@ extra-source-files:
 
 default-extensions:
 - BlockArguments
+- DefaultSignatures
+- EmptyCase
+- EmptyDataDeriving
 - FlexibleContexts
+- FlexibleInstances
 - ImportQualifiedPost
 - LambdaCase
 - OverloadedStrings
 - PatternSynonyms
+- StandaloneDeriving
 - ViewPatterns
-# Required for use of recursion-schemes
+# Required for use of the 'trees that grow' pattern
+- MultiParamTypeClasses
+- TypeFamilies
+# Used by recursion-schemes when using template haskell
 - DeriveFoldable
 - DeriveFunctor
 - DeriveTraversable
 - TemplateHaskell
-- TypeFamilies
 
 dependencies:
 - base >= 4.14 && < 5
@@ -33,7 +40,6 @@ dependencies:
 - parsec >= 3.1 && < 4
 - recursion-schemes >= 5.2 && < 6
 - text >= 1.2 && < 2
-- text-show >= 3.9 && < 4
 - unordered-containers >= 0.2.13 && < 0.3
 
 library:
@@ -48,9 +54,10 @@ library:
   - -Wno-implicit-prelude
   - -Wno-missing-deriving-strategies
   # Less stupid warnings, but I still don't care
-  - -Wno-unused-do-bind
   - -Wno-all-missed-specialisations
   - -Wno-missing-local-signatures
+  # This is a good warning, but often polymorphism isn't actually needed.
+  - -Wno-monomorphism-restriction
   # Explicit import lists are generally a good thing, but I don't want them
   # in certain cases (e.g. importing my own modules, task-specific modules like the parser).
   - -Wno-missing-import-lists

@@ -1,10 +1,12 @@
-module LambdaCalculus.Parser (parseAST, parseExpression) where
+module LambdaCalculus.Syntax.Parser
+  ( ParseError
+  , parseAST
+  ) where
+
+import LambdaCalculus.Syntax.Base
 
 import Data.List.NonEmpty (fromList)
-import Data.Text (Text)
 import Data.Text qualified as T
-import LambdaCalculus.Expression (Expression, ast2expr)
-import LambdaCalculus.Parser.AbstractSyntax
 import Text.Parsec hiding (label, token)
 import Text.Parsec qualified
 import Text.Parsec.Text (Parser)
@@ -22,49 +24,49 @@ keywords = ["let", "in"]
 keyword :: Text -> Parser ()
 keyword kwd = label (T.unpack kwd) $ do
   try do
-    string $ T.unpack kwd
+    _ <- string $ T.unpack kwd
     notFollowedBy letter
   spaces
 
 -- | An identifier is a sequence of letters which is not a keyword.
-identifier :: Parser Identifier
+identifier :: Parser Text
 identifier = label "identifier" $ do
     notFollowedBy anyKeyword
     T.pack <$> (many1 letter <* spaces)
   where anyKeyword = choice $ map keyword keywords
 
-variable :: Parser AbstractSyntax
-variable = label "variable" $ Variable <$> identifier
+variable :: Parser AST
+variable = label "variable" $ Var <$> identifier
 
-many2 :: Parser a -> Parser [a]
-many2 p = (:) <$> p <*> many1 p
+many1' :: Parser a -> Parser (NonEmpty a)
+many1' p = fromList <$> many1 p
 
-grouping :: Parser AbstractSyntax
+many2 :: Parser a -> Parser (a, NonEmpty a)
+many2 p = (,) <$> p <*> many1' p
+
+grouping :: Parser AST
 grouping = label "grouping" $ between (token '(') (token ')') expression
 
-application :: Parser AbstractSyntax
-application = Application . fromList <$> many2 applicationTerm
+application :: Parser AST
+application = uncurry App <$> many2 applicationTerm
   where applicationTerm = abstraction <|> let_ <|> grouping <|> variable
 
-abstraction :: Parser AbstractSyntax
-abstraction = label "lambda abstraction" $ Abstraction <$> between lambda (token '.') (fromList <$> many1 identifier) <*> expression
+abstraction :: Parser AST
+abstraction = label "lambda abstraction" $ Abs <$> between lambda (token '.') (many1' identifier) <*> expression
   where lambda = label "lambda" $ (char '\\' <|> char 'λ') *> spaces
 
-let_ :: Parser AbstractSyntax
+let_ :: Parser AST
 let_ = Let <$> between (keyword "let") (keyword "in") (fromList <$> definitions) <*> expression
   where
-    definitions :: Parser [Definition]
+    definitions :: Parser [Def Parse]
     definitions = flip sepBy1 (token ';') do
       name <- identifier
       token '='
       value <- expression
       pure (name, value)
 
-expression :: Parser AbstractSyntax
+expression :: Parser AST
 expression = label "expression" $ abstraction <|> let_ <|> try application <|> grouping <|> variable
 
-parseAST :: Text -> Either ParseError AbstractSyntax
+parseAST :: Text -> Either ParseError AST
 parseAST = parse (spaces *> expression <* eof) "input"
-
-parseExpression :: Text -> Either ParseError Expression
-parseExpression = fmap ast2expr . parseAST

@@ -1,5 +1,5 @@
 import LambdaCalculus
-import LambdaCalculus.Parser
+
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -9,63 +9,64 @@ import Test.Tasty.HUnit
 -- so the names for them are somewhat arbitrary.
 
 -- This should evaluate to `y y`.
-dfi :: Expression
-dfi = Application d (Application f i)
+dfi :: EvalExpr
+dfi = App d (App f i)
   where
-    d = Abstraction "x" $ Application (Variable "x") (Variable "x")
-    f = Abstraction "f" $ Application (Variable "f") (Application (Variable "f") (Variable "y"))
-    i = Abstraction "x" $ Variable "x"
+    d = Abs "x" $ App (Var "x") (Var "x")
+    f = Abs "f" $ App (Var "f") (App (Var "f") (Var "y"))
+    i = Abs "x" $ Var "x"
 
 -- This should evalaute to `y`.
-ttttt :: Expression
-ttttt = Application (Application (Application f t) (Abstraction "x" (Variable "x"))) (Variable "y")
+ttttt :: EvalExpr
+ttttt = App (App (App f t) (Abs "x" (Var "x"))) (Var "y")
   where
-    t = Abstraction "f" $ Abstraction "x" $
-          Application (Variable "f") (Application (Variable "f") (Variable "x"))
-    f = Abstraction "T" $ Abstraction "f" $ Abstraction "x" $
-          Application (Application
-                        (Application (Variable "T")
-                         (Application (Variable "T")
-                          (Application (Variable "T")
-                           (Application (Variable "T")
-                            (Variable "T")))))
-                        (Variable "f"))
-          (Variable "x")
+    t = Abs "f" $ Abs "x" $
+          App (Var "f") (App (Var "f") (Var "x"))
+    f = Abs "T" $ Abs "f" $ Abs "x" $
+          App
+          (App
+            (App (Var "T")
+              (App (Var "T")
+                (App (Var "T")
+                  (App (Var "T")
+                    (Var "T")))))
+            (Var "f"))
+          (Var "x")
 
 -- | A simple divergent expression.
-omega :: Expression
-omega = Application x x
-  where x = Abstraction "x" (Application (Variable "x") (Variable "x"))
+omega :: EvalExpr
+omega = App x x
+  where x = Abs "x" (App (Var "x") (Var "x"))
 
-cc1 :: Expression
-cc1 = Application (Variable "callcc") (Abstraction "k" (Application omega (Application (Variable "k") (Variable "z"))))
+cc1 :: EvalExpr
+cc1 = App (Var "callcc") (Abs "k" (App omega (App (Var "k") (Var "z"))))
 
-cc2 :: Expression
-cc2 = Application (Variable "y") (Application (Variable "callcc") (Abstraction "k" (Application (Variable "z") (Application (Variable "k") (Variable "x")))))
+cc2 :: EvalExpr
+cc2 = App (Var "y") (App (Var "callcc") (Abs "k" (App (Var "z") (App (Var "k") (Var "x")))))
 
 main :: IO ()
 main = defaultMain $
   testGroup "Tests"
   [ testGroup "Evaluator tests"
-    [ testCase "capture test 1: DFI" $ eval dfi @?= Application (Variable "y") (Variable "y")
-    , testCase "capture test 2: ttttt" $ eval ttttt @?= Variable "y"
-    , testCase "invoking a continuation replaces the current continuation" $ eval cc1 @?= Variable "z"
-    , testCase "callcc actually captures the current continuation" $ eval cc2 @?= Application (Variable "y") (Variable "x")
+    [ testCase "capture test 1: DFI" $ eval dfi @?= App (Var "y") (Var "y")
+    , testCase "capture test 2: ttttt" $ eval ttttt @?= Var "y"
+    , testCase "invoking a continuation replaces the current continuation" $ eval cc1 @?= Var "z"
+    , testCase "callcc actually captures the current continuation" $ eval cc2 @?= App (Var "y") (Var "x")
     ]
   , testGroup "Parser tests"
     [ testGroup "Unit tests"
-      [ testCase "identity" $ parseExpression "\\x.x" @?= Right (Abstraction "x" $ Variable "x")
-      , testCase "unary application" $ parseExpression "(x)" @?= Right (Variable "x")
-      , testCase "application shorthand" $ parseExpression "a b c d" @?= Right (Application (Application (Application (Variable "a") (Variable "b")) (Variable "c")) (Variable "d"))
-      , testCase "let" $ parseExpression "let x = \\y.y in x" @?= Right (Application (Abstraction "x" (Variable "x")) (Abstraction "y" (Variable "y")))
-      , testCase "multi-let" $ parseExpression "let x = y; y = z in x y" @?= Right (Application (Abstraction "x" (Application (Abstraction "y" (Application (Variable "x") (Variable "y"))) (Variable "z"))) (Variable "y"))
-      , testCase "ttttt" $ parseExpression "(\\T f x.(T (T (T (T T)))) f x) (\\f x.f (f x)) (\\x.x) y"
+      [ testCase "identity" $ parseEval "\\x.x" @?= Right (Abs "x" $ Var "x")
+      , testCase "unary application" $ parseEval "(x)" @?= Right (Var "x")
+      , testCase "application shorthand" $ parseEval "a b c d" @?= Right (App (App (App (Var "a") (Var "b")) (Var "c")) (Var "d"))
+      , testCase "let" $ parseEval "let x = \\y.y in x" @?= Right (App (Abs "x" (Var "x")) (Abs "y" (Var "y")))
+      , testCase "multi-let" $ parseEval "let x = y; y = z in x y" @?= Right (App (Abs "x" (App (Abs "y" (App (Var "x") (Var "y"))) (Var "z"))) (Var "y"))
+      , testCase "ttttt" $ parseEval "(\\T f x.(T (T (T (T T)))) f x) (\\f x.f (f x)) (\\x.x) y"
           @?= Right ttttt
       , testGroup "Redundant whitespace"
-        [ testCase "around variable" $ parseExpression " x " @?= Right (Variable "x")
-        , testCase "around lambda" $ parseExpression " \\ x   y . x " @?= Right (Abstraction "x" $ Abstraction "y" $ Variable "x")
-        , testCase "around application" $ parseExpression " ( x   (y ) ) " @?= Right (Application (Variable "x") (Variable "y"))
-        , testCase "around let" $ parseExpression "  let x=(y)in x  " @?= Right (Application (Abstraction "x" (Variable "x")) (Variable "y"))
+        [ testCase "around variable" $ parseEval " x " @?= Right (Var "x")
+        , testCase "around lambda" $ parseEval " \\ x   y . x " @?= Right (Abs "x" $ Abs "y" $ Var "x")
+        , testCase "around application" $ parseEval " ( x   (y ) ) " @?= Right (App (Var "x") (Var "y"))
+        , testCase "around let" $ parseEval "  let x=(y)in x  " @?= Right (App (Abs "x" (Var "x")) (Var "y"))
         ]
       ]
     ]
