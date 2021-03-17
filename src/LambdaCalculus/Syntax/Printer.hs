@@ -5,8 +5,8 @@ import LambdaCalculus.Syntax.Base
 import Data.Functor.Base (NonEmptyF (NonEmptyF))
 import Data.Functor.Foldable (cata)
 import Data.List.NonEmpty (toList)
-import Data.Text.Lazy (fromStrict, toStrict, intercalate, unwords)
-import Data.Text.Lazy.Builder (Builder, fromText, fromLazyText, toLazyText)
+import Data.Text.Lazy (fromStrict, toStrict, intercalate, unwords, singleton)
+import Data.Text.Lazy.Builder (Builder, fromText, fromLazyText, toLazyText, fromString)
 import Prelude hiding (unwords)
 
 -- I'm surprised this isn't in base somewhere.
@@ -52,7 +52,7 @@ ambiguous (_, t) = group t
 unparseAST :: AST -> Text
 unparseAST = toStrict . toLazyText . snd . cata \case
   VarF name -> tag Finite $ fromText name
-  AppF ef (unsnoc -> (exs, efinal)) -> tag Ambiguous $ foldr (\e es' -> ambiguous e <> " " <> es') (final efinal) (ef : exs)
+  AppF ef exs -> unparseApp ef exs
   AbsF names body -> tag Block $
     let names' = fromLazyText (unwords $ map fromStrict $ toList names)
     in "λ" <> names' <> ". " <> unambiguous body
@@ -61,3 +61,36 @@ unparseAST = toStrict . toLazyText . snd . cata \case
       unparseDef (name, val) = fromText name <> " = " <> unambiguous val
       defs' = fromLazyText (intercalate "; " $ map (toLazyText . unparseDef) $ toList defs)
     in "let " <> defs' <> " in " <> unambiguous body
+  CtrF ctr e -> unparseCtr ctr e
+  CaseF pats ->
+    let pats' = fromLazyText $ intercalate "; " $ map (toLazyText . unparsePat) pats
+    in tag Finite $ "{ " <> pats' <> " }"
+  PNatF n -> tag Finite $ fromString $ show n
+  PListF es ->
+    let es' = fromLazyText $ intercalate ", " $ map (toLazyText . unambiguous) es
+    in tag Finite $ "[" <> es' <> "]"
+  PStrF s -> tag Finite $ "\"" <> fromText s <> "\""
+  PCharF c -> tag Finite $ "'" <> fromLazyText (singleton c)
+  where
+    unparseApp :: Tagged Builder -> NonEmpty (Tagged Builder) -> Tagged Builder
+    unparseApp ef (unsnoc -> (exs, efinal))
+      = tag Ambiguous $ foldr (\e es' -> ambiguous e <> " " <> es') (final efinal) (ef : exs)
+
+    unparseCtr :: Ctr -> [Tagged Builder] -> Tagged Builder
+    -- Fully-applied special syntax forms
+    unparseCtr CPair [x, y] = tag Finite $ "(" <> unambiguous x <> ", "  <> unambiguous y <> ")"
+    unparseCtr CCons [x, y] = tag Finite $ "(" <> unambiguous x <> " : " <> unambiguous y <> ")"
+    -- Partially-applied syntax forms
+    unparseCtr CUnit  [] = tag Finite "()"
+    unparseCtr CPair  [] = tag Finite "(,)"
+    unparseCtr CLeft  [] = tag Finite "Left"
+    unparseCtr CRight [] = tag Finite "Right"
+    unparseCtr CZero  [] = tag Finite "Z"
+    unparseCtr CSucc  [] = tag Finite "S"
+    unparseCtr CNil   [] = tag Finite "[]"
+    unparseCtr CCons  [] = tag Finite "(:)"
+    unparseCtr CChar  [] = tag Finite "Char"
+    unparseCtr ctr (x:xs) = unparseApp (unparseCtr ctr []) (x :| xs)
+
+    unparsePat (Pat ctr ns e)
+      = unambiguous (unparseCtr ctr (map (tag Finite . fromText) ns)) <> " -> " <> unambiguous e

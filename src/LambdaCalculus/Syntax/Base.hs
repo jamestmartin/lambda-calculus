@@ -1,14 +1,16 @@
 module LambdaCalculus.Syntax.Base
-  ( Expr (..), ExprF (..), Def, DefF (..), VoidF, Text, NonEmpty (..)
-  , Parse, AST, ASTF, NonEmptyDefFs (..)
-  , pattern LetFP
+  ( Expr (..), ExprF (..), Ctr (..), Pat, Def, DefF (..), PatF (..), VoidF, Text, NonEmpty (..)
+  , Parse, AST, ASTF, ASTX, ASTXF (..), NonEmptyDefFs (..)
+  , pattern LetFP, pattern PNat, pattern PNatF, pattern PList, pattern PListF
+  , pattern PChar, pattern PCharF, pattern PStr, pattern PStrF
   , simplify
   ) where
 
 import LambdaCalculus.Expression.Base
 
 import Data.Functor.Foldable (embed, project)
-import Data.List.NonEmpty (NonEmpty (..))
+import Data.List.NonEmpty (NonEmpty (..), toList)
+import Data.Text qualified as T
 
 data Parse
 -- | The abstract syntax tree reflects the structure of the externally-visible syntax.
@@ -31,12 +33,27 @@ type AST = Expr Parse
 type instance AppArgs Parse = NonEmpty AST
 type instance AbsArgs Parse = NonEmpty Text
 type instance LetArgs Parse = NonEmpty (Def Parse)
-type instance XExpr   Parse = VoidF AST
+type instance CtrArgs Parse = [AST]
+type instance XExpr   Parse = ASTX
+
+type ASTX = ASTXF AST
 
 type ASTF = ExprF Parse
 type instance AppArgsF Parse = NonEmpty
 type instance LetArgsF Parse = NonEmptyDefFs
-type instance XExprF   Parse = VoidF
+type instance CtrArgsF Parse = []
+type instance XExprF   Parse = ASTXF
+
+data ASTXF r
+  -- | A natural number literal, e.g. `10`.
+  = PNat_ Int
+  -- | A list literal, e.g. `[x, y, z]`.
+  | PList_ [r]
+  -- | A character literal, e.g. `'a`.
+  | PChar_ Char
+  -- | A string literal, e.g. `"abcd"`.
+  | PStr_ Text
+  deriving (Eq, Functor, Foldable, Traversable, Show)
 
 instance RecursivePhase Parse where
   projectLetArgs = NonEmptyDefFs
@@ -45,22 +62,70 @@ instance RecursivePhase Parse where
 newtype NonEmptyDefFs r = NonEmptyDefFs { getNonEmptyDefFs :: NonEmpty (Text, r) }
   deriving (Eq, Functor, Foldable, Traversable, Show)
 
+
 pattern LetFP :: NonEmpty (Text, r) -> r -> ASTF r
 pattern LetFP ds e = LetF (NonEmptyDefFs ds) e
 
-{-# COMPLETE VarF, AppF, AbsF, LetFP, ExprXF #-}
+pattern PNat :: Int -> AST
+pattern PNat n = ExprX (PNat_ n)
 
--- | Combine nested expressions into compound expressions when possible.
+pattern PNatF :: Int -> ASTF r
+pattern PNatF n = ExprXF (PNat_ n)
+
+pattern PList :: [AST] -> AST
+pattern PList es = ExprX (PList_ es)
+
+pattern PListF :: [r] -> ASTF r
+pattern PListF es = ExprXF (PList_ es)
+
+pattern PChar :: Char -> AST
+pattern PChar c = ExprX (PChar_ c)
+
+pattern PCharF :: Char -> ASTF r
+pattern PCharF c = ExprXF (PChar_ c)
+
+pattern PStrF :: Text -> ASTF r
+pattern PStrF s = ExprXF (PStr_ s)
+
+pattern PStr :: Text -> AST
+pattern PStr s = ExprX (PStr_ s)
+
+{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, ExprXF                       #-}
+{-# COMPLETE Var,  App,  Abs,  Let,   Ctr,  Case,  PNat,  PList,  PChar,  PStr  #-}
+{-# COMPLETE VarF, AppF, AbsF, LetF , CtrF, CaseF, PNatF, PListF, PCharF, PStrF #-}
+{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, PNatF, PListF, PCharF, PStrF #-}
+
+-- | Combine nested expressions into compound expressions or literals when possible.
 simplify :: AST -> AST
-simplify = simplify' . embed . fmap simplify' . project
+simplify = simplify' . embed . fmap simplify . project
   where
-    simplify' (App (App f es1) es2) = simplify' $ App f (es1 <> es2)
+    -- Combine sequences of nat constructors into literals.
+    simplify' (Ctr CZero [])                  = PNat 0
+    simplify' (Ctr CSucc [PNat n])            = PNat (n + 1)
+    -- Combine sequences of string constructors into string literals.
+    simplify' (Ctr CChar [PNat n])            = PChar (toEnum n)
+    simplify' o@(Ctr CCons [PChar c, PList []])
+      | c /= '"' = PStr (T.singleton c)
+      | otherwise = o
+    simplify' o@(Ctr CCons [PChar c, PStr  cs])
+      | c /= '"' = PStr (T.cons c cs)
+      | otherwise = o
+    -- Combine sequences of list contructors into list literals.
+    simplify' (Ctr CNil  [])                  = PList []
+    simplify' (Ctr CCons [x, PList xs])       = PList (x : xs)
+    -- Move applications into constructors.
+    simplify' (App (Ctr ctr es1) es2) = simplify' $ Ctr ctr (es1 <> toList es2)
+    -- Combine reducible applications into let expressions.
     simplify' (App (Abs (nx :| ns) eb) (ex :| es)) = simplify' $ app' es $ Let ((nx, ex) :| []) $ abs' ns eb
       where app' []        e = e
             app' (ex2:es2) e = App e (ex2 :| es2)
 
             abs' []        e = e
             abs' (nx2:ns2) e = Abs (nx2 :| ns2) e
+    -- Combine sequences of nested applications into n-ary applications.
+    simplify' (App (App f es1) es2) = simplify' $ App f (es1 <> es2)
+    -- Combine sequences of nested abstractions into n-argument abstractions.
     simplify' (Abs ns1 (Abs ns2 e)) = simplify' $ Abs (ns1 <> ns2) e
+    -- Combine sequences of nested let expressions into n-definition let expressions.
     simplify' (Let ds1 (Let ds2 e)) = simplify' $ Let (ds1 <> ds2) e
     simplify' e = e

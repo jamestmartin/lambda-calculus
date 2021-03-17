@@ -1,16 +1,19 @@
 module LambdaCalculus.Evaluator
-  ( Expr (..), ExprF (..), VoidF, Text
+  ( Expr (..), Ctr (..), Pat, ExprF (..), PatF (..), VoidF, UnitF (..), Text
   , Eval, EvalExpr, EvalX, EvalXF (..)
-  , pattern AppFE, pattern Cont, pattern ContF, pattern CallCC, pattern CallCCF
+  , pattern AppFE, pattern CtrE, pattern CtrFE
+  , pattern Cont, pattern ContF, pattern CallCC, pattern CallCCF
   , eval, traceEval, substitute, alphaConvert
   ) where
 
 import LambdaCalculus.Evaluator.Base
 import LambdaCalculus.Evaluator.Continuation
 
+import Control.Monad (forM)
 import Control.Monad.Except (MonadError, ExceptT, throwError, runExceptT)
 import Control.Monad.State (MonadState, State, evalState,  modify', state, put, gets)
 import Control.Monad.Writer (runWriterT, tell)
+import Data.Foldable (fold)
 import Data.Functor.Foldable (cata, para, embed)
 import Data.HashSet (HashSet)
 import Data.HashSet qualified as HS
@@ -21,17 +24,19 @@ import Data.Void (Void, absurd)
 -- | Free variables are variables which are present in an expression but not bound by any abstraction.
 freeVars :: EvalExpr -> HashSet Text
 freeVars = cata \case
+  VarF n   -> HS.singleton n
   AbsF n e -> HS.delete  n  e
   ContF e  -> HS.delete "!" e
-  VarF n   -> HS.singleton n
-  e -> foldr HS.union HS.empty e
+  CaseF ps -> foldMap (\(Pat _ ns e) -> HS.difference e (HS.fromList ns)) ps
+  e -> fold e
 
 -- | Bound variables are variables which are bound by any form of abstraction in an expression.
 boundVars :: EvalExpr -> HashSet Text
 boundVars = cata \case
   AbsF n e -> HS.insert  n  e
   ContF e  -> HS.insert "!" e
-  e -> foldr HS.union HS.empty e
+  CaseF ps -> foldMap (\(Pat _ ns e) -> HS.union (HS.fromList ns) e) ps
+  e -> fold e
 
 -- | Vars that occur anywhere in an experession, bound or free.
 usedVars :: EvalExpr -> HashSet Text
@@ -57,6 +62,12 @@ alphaConvert ctx e_ = evalState (alphaConverter e_) $ HS.union ctx (usedVars e_)
             n' <- fresh n
             e'' <- e'
             pure $ Abs n' $ replace n n' e''
+        -- | TODO: Only replace the names that *have* to be replaced.
+        | CaseF ps <- e, any (any (`HS.member` ctx) . patNames) ps ->
+            Case <$> forM ps \(Pat ctr ns e') -> do
+              ns' <- mapM fresh ns
+              e'' <- e'
+              pure $ Pat ctr ns' $ foldr (uncurry replace) e'' (zip ns ns')
         | otherwise -> embed <$> sequenceA e
 
     -- | Create a new name which is not used anywhere else.
@@ -74,7 +85,13 @@ replace name name' = cata \case
   e
     | VarF name2    <- e, name == name2 -> Var name'
     | AbsF name2 e' <- e, name == name2 -> Abs name' e'
+    | CaseF ps <- e -> Case $ flip map ps \(Pat ctr ns e') -> Pat ctr (replace' ns) e'
     | otherwise -> embed e
+  where
+    replace' = map \case
+        n
+          | n == name -> name'
+          | otherwise -> n
 
 -- | Substitution which does *not* avoid variable capture;
 -- it only gives the correct result if the bound variables in the body
@@ -85,6 +102,8 @@ unsafeSubstitute var val = para \case
     | VarF  var2   <- e', var == var2 -> val
     | AbsF  var2 _ <- e', var == var2 -> unmodified e'
     | ContF      _ <- e', var == "!"  -> unmodified e'
+    | CaseF ps <- e' -> Case $ flip map ps \(Pat ctr ns (unmod, sub)) ->
+        Pat ctr ns if var `elem` ns then unmod else sub
     | otherwise -> substituted e'
   where
     substituted, unmodified :: EvalExprF (EvalExpr, EvalExpr) -> EvalExpr
@@ -93,18 +112,37 @@ unsafeSubstitute var val = para \case
 
 isReducible :: EvalExpr -> Bool
 isReducible = snd . cata \case
-  AppFE ctr args -> eliminator ctr [args]
-  CallCCF        -> constructor
-  AbsF _ _       -> constructor
-  ContF _        -> constructor
+  AppFE ctr args -> active ctr [args]
+  AbsF _ _       -> passive
+  ContF _        -> passive
+  CaseF _        -> passive
+  CallCCF        -> passive
+  CtrFE _        -> constant
   VarF _         -> constant
   where
     -- | Constants are irreducible in any context.
     constant = (False, False)
-    -- | Constructors are reducible if an eliminator is applied to them.
-    constructor = (True, False)
-    -- | Eliminators are reducible if they are applied to a constructor or their arguments are reducible.
-    eliminator ctr args = (False, fst ctr || snd ctr || any snd args)
+    -- | Passive expressions are reducible only if an active expression is applied to them.
+    passive = (True, False)
+    -- | Active expressions are reducible if they are applied to a constructor or their arguments are reducible.
+    active ctr args = (False, fst ctr || snd ctr || any snd args)
+
+lookupPat :: Ctr -> [Pat phase] -> Pat phase
+lookupPat ctr = foldr lookupCtr' (error "Constructor not found")
+  where
+    lookupCtr' p@(Pat ctr' _ _) p'
+      | ctr == ctr' = p
+      | otherwise = p'
+
+isData :: EvalExpr -> Bool
+isData (CtrE _) = True
+isData (App ef _) = isData ef
+isData _ = False
+
+toData :: EvalExpr -> (Ctr, [EvalExpr])
+toData (CtrE ctr) = (ctr, [])
+toData (App ef ex) = (++ [ex]) <$> toData ef
+toData _ = error "Matched expression is not data"
 
 push :: MonadState Continuation m => ContinuationCrumb -> m ()
 push c = modify' (c :)
@@ -145,6 +183,12 @@ evaluatorStep = \case
         -- perform beta reduction if possible...
         Abs name body ->
           pure $ substitute name ex body
+        Case pats
+          | isData ex -> do
+              let (ctr, xs) = toData ex
+              let Pat _ ns e = lookupPat ctr pats
+              pure $ foldr (uncurry substitute) e (zip ns xs)
+          | otherwise -> ret unmodified
         -- perform continuation calls if possible...
         Cont body -> do
           put []
@@ -155,7 +199,7 @@ evaluatorStep = \case
           pure $ App ex (Cont k)
         -- otherwise the value is irreducible and we can continue evaluation.
         _ -> ret unmodified
-  -- Neither abstractions nor variables are reducible.
+  -- Neither abstractions, constructors nor variables are reducible.
   e -> ret e
 
 eval :: EvalExpr -> EvalExpr
