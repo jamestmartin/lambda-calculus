@@ -1,0 +1,31 @@
+// Create a list by iterating `f` `n` times:
+let iterate = fix \iterate f x. { Z -> [] ; S n -> (x :: iterate f (f x) n) };
+// Use the iterate function to count to 10:
+let countTo = iterate S 1 in countTo 10;
+
+// Append two lists together:
+let append = fix \append xs ys. { [] -> ys ; (x :: xs) -> (x :: append xs ys) } xs;
+// Reverse a list:
+let reverse = fix \reverse. { [] -> [] ; (x :: xs) -> append (reverse xs) [x] };
+// Now we can reverse `"reverse"`:
+reverse "reverse";
+
+// Calculating `3 + 2` with the help of Church-encoded numerals:
+let Sf = \n f x. f (n f x); plus = \x. x Sf in plus (\f x. f (f (f x))) (\f x. f (f x)) S Z;
+
+// This expression would loop forever, but `callcc` saves the day!
+S (callcc \k. (fix \x. x) (k Z));
+
+// And if it wasn't clear, this is what the `Char` constructor does:
+{ Char c -> Char (S c) } 'a;
+// (it outputs `'b`)
+
+// Here are a few expressions which don't typecheck but are handy for debugging the evaluator:
+/*
+let D = \x. x x; F = \f. f (f y) in D (F \x. x);
+// y y
+let T = \f x. f (f x) in (\f x. T (T (T (T T))) f x) (\x. x) y;
+// y
+(\x y z. x y) y;
+// λy' z. y y'
+*/

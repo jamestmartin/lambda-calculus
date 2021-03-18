@@ -1,6 +1,8 @@
 module LambdaCalculus.Syntax.Parser
-  ( ParseError
-  , parseAST
+  ( ParseError, parse
+  , DeclOrExprAST, ProgramAST
+  , parseAST, parseDeclOrExpr, parseProgram
+  , astParser, declOrExprParser, programParser
   ) where
 
 import LambdaCalculus.Syntax.Base
@@ -8,9 +10,24 @@ import LambdaCalculus.Syntax.Base
 import Data.List.NonEmpty (fromList)
 import Data.Text qualified as T
 import Prelude hiding (succ, either)
-import Text.Parsec hiding (label, token)
+import Text.Parsec hiding (label, token, spaces)
 import Text.Parsec qualified
 import Text.Parsec.Text (Parser)
+
+spaces :: Parser ()
+spaces = Text.Parsec.spaces >> optional (try (comment >> spaces))
+  where
+    comment, lineComment, blockComment :: Parser ()
+    comment = blockComment <|> lineComment
+    lineComment = label "line comment" $ do
+      _ <- try (string "//")
+      _ <- many1 (noneOf "\n")
+      pure ()
+    blockComment = label "block comment" $ do
+      _ <- try (string "/*")
+      _ <- many1 $ notFollowedBy (string "*/") >> anyChar
+      _ <- string "*/"
+      pure ()
 
 label :: String -> Parser a -> Parser a
 label = flip Text.Parsec.label
@@ -55,15 +72,18 @@ abstraction :: Parser AST
 abstraction = label "lambda abstraction" $ Abs <$> between lambda (token '.') (many1' identifier) <*> ambiguous
   where lambda = label "lambda" $ (char '\\' <|> char 'λ') *> spaces
 
+definition :: Parser (Def Parse)
+definition = do
+  name <- identifier
+  token '='
+  value <- ambiguous
+  pure (name, value)
+
 let_ :: Parser AST
 let_ = Let <$> between (keyword "let") (keyword "in") (fromList <$> definitions) <*> ambiguous
   where
     definitions :: Parser [Def Parse]
-    definitions = flip sepBy1 (token ';') do
-      name <- identifier
-      token '='
-      value <- ambiguous
-      pure (name, value)
+    definitions = sepBy1 definition (token ';')
 
 ctr :: Parser AST
 ctr = pair <|> unit <|> either <|> nat <|> list <|> str
@@ -158,5 +178,32 @@ block = label "block expression" $ abstraction <|> let_ <|> finite
 ambiguous :: Parser AST
 ambiguous = label "any expression" $ try application <|> block
 
+astParser :: Parser AST
+astParser = ambiguous
+
 parseAST :: Text -> Either ParseError AST
 parseAST = parse (spaces *> ambiguous <* eof) "input"
+
+type Declaration = (Text, AST)
+
+declaration :: Parser Declaration
+declaration = do
+  notFollowedBy (try let_)
+  keyword "let"
+  definition
+
+-- | A program is a series of declarations and expressions to execute.
+type ProgramAST = [DeclOrExprAST]
+type DeclOrExprAST = Either Declaration AST
+
+declOrExprParser :: Parser DeclOrExprAST
+declOrExprParser = try (Left <$> declaration) <|> (Right <$> ambiguous)
+
+programParser :: Parser ProgramAST
+programParser = spaces *> sepEndBy declOrExprParser (token ';') <* eof
+
+parseDeclOrExpr :: Text -> Either ParseError DeclOrExprAST
+parseDeclOrExpr = parse declOrExprParser "input"
+
+parseProgram :: Text -> Either ParseError ProgramAST
+parseProgram = parse programParser "input"

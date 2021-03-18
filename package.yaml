@@ -37,6 +37,7 @@ default-extensions:
 
 dependencies:
 - base >= 4.14 && < 5
+- monad-loops >= 0.4.3 && < 0.5
 - mtl >= 2.2 && < 3
 - parsec >= 3.1 && < 4
 - recursion-schemes >= 5.2 && < 6
@@ -72,6 +73,8 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - jtm-lambda-calculus
+    - exceptions >= 0.10.4 && < 0.11
+    - haskeline >= 0.8 && < 1
 
 tests:
   jtm-lambda-calculus-test:

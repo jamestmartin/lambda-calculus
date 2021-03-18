@@ -12,6 +12,7 @@ module LambdaCalculus.Expression
   , pattern FixC, pattern FixFC, pattern HoleC, pattern HoleFC
   , Type (..), TypeF (..), Scheme (..), tapp
   , ast2check, ast2eval, check2eval, check2ast, eval2ast
+  , builtins
   ) where
 
 import LambdaCalculus.Evaluator.Base

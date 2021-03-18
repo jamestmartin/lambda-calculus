@@ -3,13 +3,14 @@ module LambdaCalculus.Evaluator
   , Eval, EvalExpr, EvalX, EvalXF (..)
   , pattern AppFE, pattern CtrE, pattern CtrFE
   , pattern ContE, pattern ContFE, pattern CallCCE, pattern CallCCFE
-  , eval, traceEval
+  , eval, evalTrace, evalTraceGlobal
   ) where
 
 import LambdaCalculus.Evaluator.Base
 import LambdaCalculus.Evaluator.Continuation
 
 import Control.Monad.Except (MonadError, ExceptT, throwError, runExceptT)
+import Control.Monad.Loops (iterateM_)
 import Control.Monad.State (MonadState, evalState, modify', state, put, gets)
 import Control.Monad.Writer (runWriterT, tell)
 import Data.HashMap.Strict qualified as HM
@@ -53,10 +54,6 @@ pop = state \case
 
 ret :: (MonadError EvalExpr m, MonadState Continuation m) => EvalExpr -> m EvalExpr
 ret e = pop >>= maybe (throwError e) (pure . continue1 e)
-
--- | Iteratively perform an action forever (or at least until it performs a control flow effect).
-iterateM_ :: Monad m => (a -> m a) -> a -> m b
-iterateM_ m = m' where m' x = m x >>= m'
 
 fromLeft :: Either a Void -> a
 fromLeft (Left x) = x
@@ -105,10 +102,15 @@ evaluatorStep = \case
 eval :: EvalExpr -> EvalExpr
 eval = flip evalState [] . loop evaluatorStep
 
-traceEval :: EvalExpr -> (EvalExpr, [EvalExpr])
-traceEval = flip evalState [] . runWriterT . loop \e -> do
-  -- You can also use `gets (continue e)` to print the *entire* expression each step.
-  -- This is a trade-off because it becomes much harder to pick out what changed from the rest of the expression.
+-- | Trace each evaluation step.
+evalTrace :: EvalExpr -> (EvalExpr, [EvalExpr])
+evalTrace = flip evalState [] . runWriterT . loop \e -> do
+  tell [e]
+  evaluatorStep e
+
+-- | Trace each evaluation step, including the *entire* continuation of each step.
+evalTraceGlobal :: EvalExpr -> (EvalExpr, [EvalExpr])
+evalTraceGlobal = flip evalState [] . runWriterT . loop \e -> do
   e' <- gets (continue e)
   tell [e']
   evaluatorStep e

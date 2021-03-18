@@ -5,11 +5,27 @@ using the Hindley-Milner type system, plus some builtin types, `fix`, and `callc
 ## Usage
 Run the program using `stack run` (or run the tests with `stack test`).
 
-Type in your expression at the prompt: `>> `. This will happen:
-* the type for the expression will be inferred and then printed,
-* then, regardless of whether typechecking succeeded, expression will be evaluated to normal form using the call-by-value evaluation strategy and then printed.
+Type in your expression at the prompt: `>> `.
+Yourexpression will be evaluated to normal form using the call-by-value evaluation strategy and then printed.
 
-Exit the prompt with `Ctrl-c` (or equivalent).
+Exit the prompt with `Ctrl-d` (or equivalent).
+
+## Commands
+Instead of entering an expression in the REPL, you may enter a command.
+These commands are available:
+
+* `:load <filename>`: Execute a program in the interpreter, importing all definitions.
+* `:clear`: Clear all of your variable definitions.
+* `:check <on/off> <always/decls/off>`:
+  * If the first argument is `off`, then expressions will be evaluated even if they do not typecheck.
+  * If the second argument is `always`, inferred types will always be printed.
+    If it is `decls`, then only declarations will have their inferred types printed.
+    Otherwise, the type of expressions is never printed.
+  * The default values are `on` `decls`.
+* `:trace <off/local/global>`:
+  * If the argument is `local`, intermediate expressions will be printed as the evaluator evaluates them.
+  * If the argument is `global`, the *entire* expression will be printed each evaluator step.
+  * The default value is `off`.
 
 ## Syntax
 The parser's error messages currently are virtually useless, so be very careful with your syntax.
@@ -30,6 +46,12 @@ The parser's error messages currently are virtually useless, so be very careful 
 * Literals: `1234`, `[e, f, g, h]`, `'a`, `"abc"`
   * Strings are represented as lists of characters.
 * Type annotations: there are no type annotations; types are inferred only.
+* Comments: `// line comment`, `/* block comment */`
+
+Top-level contexts (e.g. the REPL or a source code file)
+allow declarations (`let` expressions without `in ...`),
+which make your definitions available for the rest of the program's execution.
+You may separate multiple declarations and expressions with `;`.
 
 ## Types
 Types are checked/inferred using the Hindley-Milner type inference algorithm.
@@ -59,66 +81,4 @@ because they perform the side effect of modifying the current continuation,
 and this is *not* valid syntax you can input into the REPL.
 
 ## Example code
-Create a list by iterating `f` `n` times:
-```
-fix \iterate f x. { Z -> [] ; S n -> (x :: iterate f (f x) n) }
-: ∀e. ((e -> e) -> (e -> (Nat -> [e])))
-```
-
-Use the iterate function to count to 10:
-```
->> let iterate = fix \iterate f x. { Z -> [] ; S n -> (x :: iterate f (f x) n) }; countTo = iterate S 1 in countTo 10
-: [Nat]
-[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-```
-
-Append two lists together:
-```
-fix \append xs ys. { [] -> ys ; (x :: xs) -> (x :: append xs ys) } xs
-: ∀j. ([j] -> ([j] -> [j]))
-```
-
-Reverse a list:
-```
-fix \reverse. { [] -> [] ; (x :: xs) -> append (reverse xs) [x] }
-: ∀c1. ([c1] -> [c1])
-```
-
-Putting them together so we can reverse `"reverse"`:
-```
->> let append = fix \append xs ys. { [] -> ys ; (x :: xs) -> (x :: append xs ys) } xs; reverse = fix \reverse. { [] -> [] ; (x :: xs) -> append (reverse xs) [x] } in reverse "reverse"
-: [Char]
-"esrever"
-```
-
-Calculating `3 + 2` with the help of Church-encoded numerals:
-```
->> let Sf = \n f x. f (n f x); plus = \x. x Sf in plus (\f x. f (f (f x))) (\f x. f (f x)) S Z
-: Nat
-5
-```
-
-This expression would loop forever, but `callcc` saves the day!
-```
->> S (callcc \k. (fix \x. x) (k Z))
-: Nat
-1
-```
-
-And if it wasn't clear, this is what the `Char` constructor does:
-
-```
->> { Char c -> Char (S c) } 'a
-: Char
-'b
-```
-
-Here are a few expressions which don't typecheck but are handy for debugging the evaluator:
-```
->> let D = \x. x x; F = \f. f (f y) in D (F \x. x)
-y y
->> let T = \f x. f (f x) in (\f x. T (T (T (T T))) f x) (\x. x) y
-y
->> (\x y z. x y) y
-λy' z. y y'
-```
+You can see some example code in `examples.lc`.
