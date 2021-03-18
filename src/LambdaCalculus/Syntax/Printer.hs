@@ -71,6 +71,7 @@ unparseAST = toStrict . toLazyText . snd . cata \case
     in tag Finite $ "[" <> es' <> "]"
   PStrF s -> tag Finite $ "\"" <> fromText s <> "\""
   PCharF c -> tag Finite $ "'" <> fromLazyText (singleton c)
+  HoleFP -> tag Finite "_"
   where
     unparseApp :: Tagged Builder -> NonEmpty (Tagged Builder) -> Tagged Builder
     unparseApp ef (unsnoc -> (exs, efinal))
@@ -78,8 +79,8 @@ unparseAST = toStrict . toLazyText . snd . cata \case
 
     unparseCtr :: Ctr -> [Tagged Builder] -> Tagged Builder
     -- Fully-applied special syntax forms
-    unparseCtr CPair [x, y] = tag Finite $ "(" <> unambiguous x <> ", "  <> unambiguous y <> ")"
-    unparseCtr CCons [x, y] = tag Finite $ "(" <> unambiguous x <> " : " <> unambiguous y <> ")"
+    unparseCtr CPair [x, y] = tag Finite $ "(" <> unambiguous x <>  ", "  <> unambiguous y <> ")"
+    unparseCtr CCons [x, y] = tag Finite $ "(" <> unambiguous x <> " :: " <> unambiguous y <> ")"
     -- Partially-applied syntax forms
     unparseCtr CUnit  [] = tag Finite "()"
     unparseCtr CPair  [] = tag Finite "(,)"
@@ -88,7 +89,7 @@ unparseAST = toStrict . toLazyText . snd . cata \case
     unparseCtr CZero  [] = tag Finite "Z"
     unparseCtr CSucc  [] = tag Finite "S"
     unparseCtr CNil   [] = tag Finite "[]"
-    unparseCtr CCons  [] = tag Finite "(:)"
+    unparseCtr CCons  [] = tag Finite "(::)"
     unparseCtr CChar  [] = tag Finite "Char"
     unparseCtr ctr (x:xs) = unparseApp (unparseCtr ctr []) (x :| xs)
 

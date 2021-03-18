@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 module LambdaCalculus.Expression.Base
   ( Text, VoidF, UnitF (..), absurd'
@@ -5,11 +6,24 @@ module LambdaCalculus.Expression.Base
   , ExprF (..), PatF (..), DefF (..), AppArgsF, LetArgsF, CtrArgsF, XExprF
   , RecursivePhase, projectAppArgs, projectLetArgs, projectCtrArgs, projectXExpr, projectDef
   , embedAppArgs, embedLetArgs, embedCtrArgs, embedXExpr, embedDef
+  , Substitutable, free, bound, used, collectVars, rename, rename1
+  , substitute, substitute1, unsafeSubstitute, unsafeSubstitute1
+  , runRenamer, freshVar, replaceNames, runSubstituter, maySubstitute
   ) where
 
+import Control.Monad.Reader (MonadReader, Reader, runReader, asks, local)
+import Control.Monad.State (MonadState, StateT, evalStateT, state)
+import Control.Monad.Zip (MonadZip, mzipWith)
+import Data.Foldable (fold)
 import Data.Functor.Foldable (Base, Recursive, Corecursive, project, embed)
+import Data.HashMap.Strict (HashMap)
+import Data.HashMap.Strict qualified as HM
+import Data.HashSet (HashSet)
+import Data.HashSet qualified as HS
 import Data.Kind (Type)
+import Data.Stream qualified as S
 import Data.Text (Text)
+import Data.Text qualified as T
 
 data Expr phase
   -- | A variable: `x`.
@@ -100,8 +114,8 @@ type family LetArgsF phase :: Type -> Type
 type family CtrArgsF phase :: Type -> Type
 type family XExprF phase :: Type -> Type
 
-data DefF r = DefF !Text !r
-  deriving (Eq, Functor, Show)
+data DefF r = Def !Text !r
+  deriving (Eq, Functor, Foldable, Traversable, Show)
 
 -- | A contractible data type with one extra type parameter.
 data UnitF a = Unit
@@ -199,10 +213,10 @@ class Functor (ExprF phase) => RecursivePhase phase where
   embedXExpr   = id
 
 projectDef :: Def phase -> DefF (Expr phase)
-projectDef = uncurry DefF
+projectDef = uncurry Def
 
 embedDef :: DefF (Expr phase) -> Def phase
-embedDef (DefF n e) = (n, e)
+embedDef (Def n e) = (n, e)
 
 instance RecursivePhase phase => Recursive (Expr phase) where
   project = \case
@@ -227,3 +241,117 @@ instance RecursivePhase phase => Corecursive (Expr phase) where
 ---
 --- End base functor boilerplate.
 ---
+
+class Substitutable e where
+  -- | Fold over the variables in the expression with a monoid,
+  -- given what to do with variable usage sites and binding sites respectively.
+  collectVars :: Monoid m => (Text -> m) -> (Text -> m -> m) -> e -> m
+
+  -- | Free variables are variables which occur anywhere in an expression
+  -- where they are not bound by an abstraction.
+  free :: e -> HashSet Text
+  free = collectVars HS.singleton HS.delete
+
+  -- | Bound variables are variables which are abstracted over anywhere in an expression.
+  bound :: e -> HashSet Text
+  bound = collectVars (const HS.empty) HS.insert
+
+  -- | Used variables are variables which appear *anywhere* in an expression, free or bound.
+  used :: e -> HashSet Text
+  used = collectVars HS.singleton HS.insert
+
+  -- | Given a map between variable names and expressions,
+  -- replace each free occurrence of a variable with its respective expression.
+  substitute :: HashMap Text e -> e -> e
+  substitute substs = unsafeSubstitute substs . rename (foldMap free substs)
+
+  substitute1 :: Text -> e -> e -> e
+  substitute1 n e = substitute (HM.singleton n e)
+
+  -- | Rename all bound variables in an expression (both a binding sites and usage sites)
+  -- with new names where the new names are *not* members of the provided set.
+  rename :: HashSet Text -> e -> e
+
+  rename1 :: Text -> e -> e
+  rename1 n = rename (HS.singleton n)
+
+  -- | A variant of substitution which does *not* avoid variable capture;
+  -- it only gives the correct result if the bound variables in the body
+  -- are disjoint from the free variables in the argument.
+  unsafeSubstitute :: HashMap Text e -> e -> e
+
+  unsafeSubstitute1 :: Text -> e -> e -> e
+  unsafeSubstitute1 n e = unsafeSubstitute (HM.singleton n e)
+
+--
+-- These primitives are likely to be useful for implementing `rename`.
+-- Ideally, I would like to find a way to move the implementation of `rename` here entirely,
+-- but I haven't yet figured out an appropriate abstraction to do so.
+--
+
+-- | Run an action which requires a stateful context of used variable names
+-- and a local context of variable replacements.
+--
+-- This is a useful monad for implementing the `rename` function.
+runRenamer :: Substitutable e
+           => (HashSet Text -> e -> StateT (HashSet Text) (Reader (HashMap Text Text)) a)
+           -> HashSet Text
+           -> e
+           -> a
+runRenamer m ctx e = runReader (evalStateT (m ctx e) dirtyNames) HM.empty
+  where dirtyNames = HS.union ctx (used e)
+
+-- | Create a new variable name within a context of used variable names.
+freshVar :: MonadState (HashSet Text) m => Text -> m Text
+freshVar baseName =
+  state \ctx -> let name = newName ctx in (name, HS.insert name ctx)
+  where
+    names = S.iterate (`T.snoc` '\'') baseName
+    newName ctx = S.head $ S.filter (not . (`HS.member` ctx)) names
+
+-- | Replace a collection of old variable names with new variable names
+-- and apply those replacements within a context.
+replaceNames :: ( MonadReader (HashMap Text Text) m
+                , MonadState  (HashSet Text)      m
+                , MonadZip t, Traversable t
+                )
+              => HashSet Text -> t Text -> m a -> m (t Text, a)
+replaceNames badNames names m = do
+  newNames <- mapM freshVarIfNecessary names
+  let replacements = HM.filterWithKey (/=) $ fold $ mzipWith HM.singleton names newNames
+  x <- local (HM.union replacements) m
+  pure (newNames, x)
+  where
+    freshVarIfNecessary name
+      | name `HS.member` badNames = freshVar name
+      | otherwise = pure name
+
+---
+--- The same as the above section but for `substitute`.
+--- This is useful when implementing substitution as a paramorphism.
+---
+
+-- | Run an action in a local context of substitutions.
+--
+-- This monad is useful for implementing, you guessed it, substitution.
+runSubstituter :: (e -> Reader (HashMap Text e) a)
+               -> HashMap Text e
+               -> e
+               -> a
+runSubstituter m substs e = runReader (m e) substs
+
+-- | Apply only the substitutions which are not bound,
+-- and only if there are substitutions left to apply.
+maySubstitute :: ( MonadReader (HashMap Text b) m
+                 , Functor t, Foldable t
+                 )
+              => t Text -> (a, m a) -> m a
+maySubstitute ns (unmodified, substituted) =
+  local (compose $ fmap HM.delete ns) do
+    noMoreSubsts <- asks HM.null
+    if noMoreSubsts
+      then pure unmodified
+      else substituted
+
+compose :: Foldable t => t (a -> a) -> a -> a
+compose = foldr (.) id

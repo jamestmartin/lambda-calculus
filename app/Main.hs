@@ -15,8 +15,10 @@ prompt text = do
   getLine
 
 main :: IO ()
-main = forever $ parseEval <$> prompt ">> " >>= \case
+main = forever $ parseCheck <$> prompt ">> " >>= \case
   Left parseError -> putStrLn $ "Parse error: " <> pack (show parseError)
   -- TODO: Support choosing which version to use at runtime.
-  Right expr -> putStrLn $ unparseEval $ eval expr
-  --Right expr -> mapM_ (putStrLn . unparseEval) $ snd $ traceEval expr
+  Right expr -> do
+    either putStrLn (putStrLn . (": " <>) . unparseScheme) $ infer expr
+    putStrLn $ unparseEval $ eval $ check2eval expr
+    --mapM_ (putStrLn . unparseEval) $ snd $ traceEval $ check2eval expr

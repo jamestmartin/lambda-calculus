@@ -1,6 +1,6 @@
 module LambdaCalculus.Evaluator.Continuation
   ( Continuation, continue, continue1
-  , ContinuationCrumb (ApplyTo, AppliedTo, AbstractedOver)
+  , ContinuationCrumb (..)
   ) where
 
 import LambdaCalculus.Evaluator.Base

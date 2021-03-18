@@ -86,10 +86,10 @@ ctr = pair <|> unit <|> either <|> nat <|> list <|> str
     succ = Ctr CSucc [] <$ keyword "S"
     natLit = (PNat . read <$> many1 digit) <* spaces
     list = cons <|> consCtr <|> listLit
-    consCtr = Ctr CCons [] <$ keyword "(:)"
+    consCtr = Ctr CCons [] <$ keyword "(::)"
     cons = try $ between (token '(') (token ')') do
       e1 <- ambiguous
-      token ':'
+      keyword "::"
       e2 <- ambiguous
       pure $ Ctr CCons [e1, e2]
     listLit = fmap PList $ between (token '[') (token ']') $ sepEndBy ambiguous (token ',')
@@ -105,35 +105,36 @@ pat = label "case alternate" $ do
   keyword "->"
   e <- ambiguous
   pure $ Pat c ns e
-  where pair = try $ between (token '(') (token ')') do
-          e1 <- identifier
-          token ','
-          e2 <- identifier
-          pure (CPair, [e1, e2])
-        unit = (CUnit, []) <$ keyword "()"
-        left = do
-          keyword "Left"
-          e <- identifier
-          pure (CLeft, [e])
-        right = do
-          keyword "Right"
-          e <- identifier
-          pure (CRight, [e])
-        zero = (CZero, []) <$ keyword "Z"
-        succ = do
-          keyword "S"
-          e <- identifier
-          pure (CSucc, [e])
-        nil = (CNil, []) <$ keyword "[]"
-        cons = try $ between (token '(') (token ')') do
-          e1 <- identifier
-          token ':'
-          e2 <- identifier
-          pure (CCons, [e1, e2])
-        char' = do
-          keyword "Char"
-          e <- identifier
-          pure (CChar, [e])
+  where
+    pair = try $ between (token '(') (token ')') do
+      e1 <- identifier
+      token ','
+      e2 <- identifier
+      pure (CPair, [e1, e2])
+    unit = (CUnit, []) <$ keyword "()"
+    left = do
+      keyword "Left"
+      e <- identifier
+      pure (CLeft, [e])
+    right = do
+      keyword "Right"
+      e <- identifier
+      pure (CRight, [e])
+    zero = (CZero, []) <$ keyword "Z"
+    succ = do
+      keyword "S"
+      e <- identifier
+      pure (CSucc, [e])
+    nil = (CNil, []) <$ keyword "[]"
+    cons = try $ between (token '(') (token ')') do
+      e1 <- identifier
+      keyword "::"
+      e2 <- identifier
+      pure (CCons, [e1, e2])
+    char' = do
+      keyword "Char"
+      e <- identifier
+      pure (CChar, [e])
 
 case_ :: Parser AST
 case_ = label "case patterns" $ do
@@ -142,13 +143,16 @@ case_ = label "case patterns" $ do
   token '}'
   pure $ Case pats
 
+hole :: Parser AST
+hole = label "hole" $ HoleP <$ token '_'
+
 -- | Guaranteed to consume a finite amount of input
 finite :: Parser AST
-finite = label "finite expression" $ variable <|> ctr <|> case_ <|> grouping
+finite = label "finite expression" $ variable <|> hole <|> ctr <|> case_ <|> grouping
 
 -- | Guaranteed to consume input, but may continue until it reaches a terminator
 block :: Parser AST
-block = label "block expression" $ finite <|> abstraction <|> let_
+block = label "block expression" $ abstraction <|> let_ <|> finite
 
 -- | Not guaranteed to consume input at all, may continue until it reaches a terminator
 ambiguous :: Parser AST

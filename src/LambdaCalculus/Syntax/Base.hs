@@ -1,8 +1,9 @@
 module LambdaCalculus.Syntax.Base
   ( Expr (..), ExprF (..), Ctr (..), Pat, Def, DefF (..), PatF (..), VoidF, Text, NonEmpty (..)
+  , substitute, substitute1, rename, rename1, free, bound, used
   , Parse, AST, ASTF, ASTX, ASTXF (..), NonEmptyDefFs (..)
   , pattern LetFP, pattern PNat, pattern PNatF, pattern PList, pattern PListF
-  , pattern PChar, pattern PCharF, pattern PStr, pattern PStrF
+  , pattern PChar, pattern PCharF, pattern PStr, pattern PStrF, pattern HoleP, pattern HoleFP
   , simplify
   ) where
 
@@ -53,6 +54,8 @@ data ASTXF r
   | PChar_ Char
   -- | A string literal, e.g. `"abcd"`.
   | PStr_ Text
+  -- | A type hole.
+  | HoleP_
   deriving (Eq, Functor, Foldable, Traversable, Show)
 
 instance RecursivePhase Parse where
@@ -61,7 +64,6 @@ instance RecursivePhase Parse where
 
 newtype NonEmptyDefFs r = NonEmptyDefFs { getNonEmptyDefFs :: NonEmpty (Text, r) }
   deriving (Eq, Functor, Foldable, Traversable, Show)
-
 
 pattern LetFP :: NonEmpty (Text, r) -> r -> ASTF r
 pattern LetFP ds e = LetF (NonEmptyDefFs ds) e
@@ -90,10 +92,18 @@ pattern PStrF s = ExprXF (PStr_ s)
 pattern PStr :: Text -> AST
 pattern PStr s = ExprX (PStr_ s)
 
-{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, ExprXF                       #-}
-{-# COMPLETE Var,  App,  Abs,  Let,   Ctr,  Case,  PNat,  PList,  PChar,  PStr  #-}
-{-# COMPLETE VarF, AppF, AbsF, LetF , CtrF, CaseF, PNatF, PListF, PCharF, PStrF #-}
-{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, PNatF, PListF, PCharF, PStrF #-}
+pattern HoleP :: AST
+pattern HoleP = ExprX HoleP_
+
+pattern HoleFP :: ASTF r
+pattern HoleFP = ExprXF HoleP_
+
+{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, ExprXF                               #-}
+{-# COMPLETE Var,  App,  Abs,  Let,   Ctr,  Case,  PNat,  PList,  PChar,  PStr,  HoleP  #-}
+{-# COMPLETE VarF, AppF, AbsF, LetF , CtrF, CaseF, PNatF, PListF, PCharF, PStrF, HoleFP #-}
+{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, PNatF, PListF, PCharF, PStrF, HoleFP #-}
+
+-- TODO: Implement Substitutable for AST.
 
 -- | Combine nested expressions into compound expressions or literals when possible.
 simplify :: AST -> AST
