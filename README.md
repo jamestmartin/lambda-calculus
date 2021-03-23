@@ -1,6 +1,6 @@
 # Lambda Calculus
 This is a simple programming language derived from lambda calculus,
-using the Hindley-Milner type system, plus some builtin types, `fix`, and `callcc`
+using the Hindley-Milner type system, plus `letrec` and `callcc`.
 
 ## Usage
 Run the program using `stack run` (or run the tests with `stack test`).
@@ -34,11 +34,13 @@ The parser's error messages currently are virtually useless, so be very careful 
 * Function application: `f x y`
 * Lambda abstraction: `\x y z. E` or `λx y z. E`
 * Let expressions: `let x = E; y = F in G`
+  * Or letrec expressions, which can only define variable,
+    but which can be self-referential: `letrec x = ... x ... in E`
 * Parenthetical expressions: `(E)`
 * Constructors: `()`, `(x, y)` (or `(,) x y`), `Left x`, `Right y`, `Z`, `S`, `[]`, `(x :: xs)` (or `(:) x xs`), `Char n`.
   * The parentheses around the cons constructor are not optional.
   * `Char` takes a natural number and turns it into a character.
-* Pattern matchers: `case { Left a -> e ; Right y -> f }`
+* Pattern matchers: `{ Left a -> e ; Right y -> f }`
   * Pattern matchers can be applied like functions, e.g. `{ Z -> x, S -> y } 10` reduces to `y`.
   * Patterns must use the regular form of the constructor, e.g. `(x :: xs)` and not `((::) x xs)`.
   * There are no nested patterns or default patterns.
@@ -49,9 +51,9 @@ The parser's error messages currently are virtually useless, so be very careful 
 * Comments: `// line comment`, `/* block comment */`
 
 Top-level contexts (e.g. the REPL or a source code file)
-allow declarations (`let` expressions without `in ...`),
+allow declarations (`let(rec) x = E` without multiple definitions `in ...`),
 which make your definitions available for the rest of the program's execution.
-You may separate multiple declarations and expressions with `;`.
+You must separate your declarations and expressions with `;`.
 
 ## Types
 Types are checked/inferred using the Hindley-Milner type inference algorithm.
@@ -71,7 +73,6 @@ Builtins are variables that correspond with a built-in language feature
 that cannot be replicated by user-written code.
 They still are just variables though; they do not receive special syntactic treatment.
 
-* `fix : ∀a. ((a -> a) -> a)`: an alias for the strict fixpoint combinator that the typechecker can typecheck.
 * `callcc : ∀a b. (((a -> b) -> a) -> a)`: [the call-with-current-continuation control flow operator](https://en.wikipedia.org/wiki/Call-with-current-continuation).
 
 Continuations are printed as `λ!. ... ! ...`, like a lambda abstraction

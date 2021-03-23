@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-do-bind -Wno-monomorphism-restriction #-}
 module Main (main) where
 
 import LambdaCalculus
@@ -107,7 +106,9 @@ commandParser = do
     load = Load <$> do
       try $ string "load "
       spaces
-      many1 anyChar
+      filename <- many1 (noneOf " ")
+      spaces
+      pure filename
 
     clear = Clear <$ try (string "clear")
 

@@ -80,10 +80,13 @@ definition = do
   pure (name, value)
 
 let_ :: Parser AST
-let_ = Let <$> between (keyword "let") (keyword "in") (fromList <$> definitions) <*> ambiguous
+let_ = letrecstar <|> letstar
   where
-    definitions :: Parser [Def Parse]
-    definitions = sepBy1 definition (token ';')
+    letrecstar = LetRecP <$> between (try (keyword "letrec")) (keyword "in") definition <*> ambiguous
+    letstar = Let <$> between (keyword "let") (keyword "in") definitions <*> ambiguous
+
+    definitions :: Parser (NonEmpty (Def Parse))
+    definitions = fromList <$> sepBy1 definition (token ';')
 
 ctr :: Parser AST
 ctr = pair <|> unit <|> either <|> nat <|> list <|> str
@@ -187,10 +190,15 @@ parseAST = parse (spaces *> ambiguous <* eof) "input"
 type Declaration = (Text, AST)
 
 declaration :: Parser Declaration
-declaration = do
-  notFollowedBy (try let_)
-  keyword "let"
-  definition
+declaration = notFollowedBy (try let_) >> (declrec <|> decl)
+  where
+    declrec = do
+      try $ keyword "letrec"
+      (name, expr) <- definition
+      pure (name, LetRecP (name, expr) (Var name))
+    decl = do
+      keyword "let"
+      definition
 
 -- | A program is a series of declarations and expressions to execute.
 type ProgramAST = [DeclOrExprAST]

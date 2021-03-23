@@ -71,6 +71,9 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wno-missing-export-lists
+    - -Wno-monomorphism-restriction
+    - -Wno-unused-do-bind
     dependencies:
     - jtm-lambda-calculus
     - exceptions >= 0.10.4 && < 0.11

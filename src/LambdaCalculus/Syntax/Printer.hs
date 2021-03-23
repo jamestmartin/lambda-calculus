@@ -56,11 +56,8 @@ unparseAST = toStrict . toLazyText . snd . cata \case
   AbsF names body -> tag Block $
     let names' = fromLazyText (unwords $ map fromStrict $ toList names)
     in "λ" <> names' <> ". " <> unambiguous body
-  LetFP defs body -> tag Block $
-    let
-      unparseDef (name, val) = fromText name <> " = " <> unambiguous val
-      defs' = fromLazyText (intercalate "; " $ map (toLazyText . unparseDef) $ toList defs)
-    in "let " <> defs' <> " in " <> unambiguous body
+  LetFP defs body -> tag Block $ "let " <> unparseDefs defs <> " in " <> unambiguous body
+  LetRecFP def body -> tag Block $ "letrec " <> unparseDef def <> " in " <> unambiguous body
   CtrF ctr e -> unparseCtr ctr e
   CaseF pats ->
     let pats' = fromLazyText $ intercalate "; " $ map (toLazyText . unparsePat) pats
@@ -76,6 +73,9 @@ unparseAST = toStrict . toLazyText . snd . cata \case
     unparseApp :: Tagged Builder -> NonEmpty (Tagged Builder) -> Tagged Builder
     unparseApp ef (unsnoc -> (exs, efinal))
       = tag Ambiguous $ foldr (\e es' -> ambiguous e <> " " <> es') (final efinal) (ef : exs)
+
+    unparseDef (name, val) = fromText name <> " = " <> unambiguous val
+    unparseDefs defs = fromLazyText (intercalate "; " $ map (toLazyText . unparseDef) $ toList defs)
 
     unparseCtr :: Ctr -> [Tagged Builder] -> Tagged Builder
     -- Fully-applied special syntax forms

@@ -27,7 +27,7 @@ import Data.List.NonEmpty (toList)
 import Data.Text (unpack)
 
 builtins :: HashMap Text CheckExpr
-builtins = HM.fromList [("callcc", CallCCC), ("fix", FixC)]
+builtins = HM.fromList [("callcc", CallCCC)]
 
 -- | Convert from an abstract syntax tree to a typechecker expression.
 ast2check :: AST -> CheckExpr
@@ -38,6 +38,7 @@ ast2check = substitute builtins . cata \case
   LetF ds e ->
     let letExpr name val body' = App (Abs name body') val
     in foldr (uncurry letExpr) e $ getNonEmptyDefFs ds
+  LetRecFP (nx, ex) e -> App (Abs nx e) (App FixC (Abs nx ex))
   CtrF ctr es -> foldl' App (CtrC ctr) es
   CaseF ps -> Case ps
   PNatF n -> int2ast n
