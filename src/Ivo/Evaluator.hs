@@ -14,7 +14,7 @@ import Control.Monad.Loops (iterateM_)
 import Control.Monad.State (MonadState, evalState, modify', state, put, gets)
 import Control.Monad.Writer (runWriterT, tell)
 import Data.HashMap.Strict qualified as HM
-import Data.Void (Void, absurd)
+import Data.Void (absurd)
 
 isReducible :: EvalExpr -> Bool
 -- Applications of function type constructors

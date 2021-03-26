@@ -1,8 +1,9 @@
 module Ivo.Types
   ( module Ivo.Types.Base
-  , infer
+  , infer, check
   ) where
 
+import Ivo.Syntax.Printer
 import Ivo.Types.Base
 
 import Control.Applicative ((<|>))
@@ -99,6 +100,10 @@ j (Case ctrs) = do
 j (CtrC ctr) = do
   (t_ret, ts_n) <- ctrTy ctr
   pure $ foldr (\t_a t_r -> tapp [TAbs, t_a, t_r]) t_ret ts_n
+j (Ann () e t_ann) = do
+  t_ret <- j e
+  unify t_ret t_ann
+  pure t_ann
 j CallCCC = do
   t_a <- fresh
   t_b <- fresh
@@ -153,6 +158,16 @@ runInferencer m = evalRWST m HM.empty freshNames
 infer :: CheckExpr -> Either Text Scheme
 infer e = do
   (t, c) <- runInferencer $ j e
+  s <- solve' c
+  let t' = substitute s t
+  pure $ runReader (generalize t') HM.empty
+
+check :: Type -> CheckExpr -> Either Text Scheme
+check t_ann e = do
+  (t, c) <- runInferencer do
+    t_ret <- j e
+    unify t_ret t_ann
+    pure t_ann
   s <- solve' c
   let t' = substitute s t
   pure $ runReader (generalize t') HM.empty

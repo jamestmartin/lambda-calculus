@@ -1,10 +1,11 @@
-module Ivo.Syntax.Printer (unparseAST) where
+module Ivo.Syntax.Printer (unparseAST, unparseType, unparseScheme) where
 
 import Ivo.Syntax.Base
 
 import Data.Functor.Base (NonEmptyF (NonEmptyF))
 import Data.Functor.Foldable (cata)
 import Data.List.NonEmpty (toList)
+import Data.Text qualified as T
 import Data.Text.Lazy (fromStrict, toStrict, intercalate, unwords, singleton)
 import Data.Text.Lazy.Builder (Builder, fromText, fromLazyText, toLazyText, fromString)
 import Prelude hiding (unwords)
@@ -62,6 +63,7 @@ unparseAST = toStrict . toLazyText . snd . cata \case
   CaseF pats ->
     let pats' = fromLazyText $ intercalate "; " $ map (toLazyText . unparsePat) pats
     in tag Finite $ "{ " <> pats' <> " }"
+  AnnF () e t -> tag Ambiguous $ final e <> " : " <> fromText (unparseType t)
   PNatF n -> tag Finite $ fromString $ show n
   PListF es ->
     let es' = fromLazyText $ intercalate ", " $ map (toLazyText . unambiguous) es
@@ -95,3 +97,28 @@ unparseAST = toStrict . toLazyText . snd . cata \case
 
     unparsePat (Pat ctr ns e)
       = unambiguous (unparseCtr ctr (map (tag Finite . fromText) ns)) <> " -> " <> unambiguous e
+
+-- HACK
+pattern TApp2 :: Type -> Type -> Type -> Type
+pattern TApp2 tf tx ty = TApp (TApp tf tx) ty
+
+-- TODO: Improve these printers.
+unparseType :: Type -> Text
+unparseType (TVar name) = name
+unparseType (TApp2 TAbs a b) = "(" <> unparseType a <> " -> " <> unparseType b <> ")"
+unparseType (TApp2 TProd a b) = "(" <> unparseType a <> " * " <> unparseType b <> ")"
+unparseType (TApp2 TSum a b) = "(" <> unparseType a <> " + " <> unparseType b <> ")"
+unparseType (TApp TList a) = "[" <> unparseType a <> "]"
+unparseType (TApp a b) = "(" <> unparseType a <> " " <> unparseType b <> ")"
+unparseType TAbs = "(->)"
+unparseType TProd = "(*)"
+unparseType TSum = "(+)"
+unparseType TUnit = "★"
+unparseType TVoid = "⊥"
+unparseType TNat = "Nat"
+unparseType TList = "[]"
+unparseType TChar = "Char"
+
+unparseScheme :: Scheme -> Text
+unparseScheme (TForall [] t) = unparseType t
+unparseScheme (TForall names t) = "∀" <> T.unwords names <>  ". " <> unparseType t

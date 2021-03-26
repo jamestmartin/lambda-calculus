@@ -1,5 +1,6 @@
 module Ivo.Syntax.Base
   ( Expr (..), ExprF (..), Ctr (..), Pat, Def, DefF (..), PatF (..), VoidF, Text, NonEmpty (..)
+  , Type (..), TypeF (..), Scheme (..), tapp
   , substitute, substitute1, rename, rename1, free, bound, used
   , Parse, AST, ASTF, ASTX, ASTXF (..), NonEmptyDefFs (..)
   , pattern LetFP, pattern LetRecP, pattern LetRecFP
@@ -36,6 +37,7 @@ type instance AppArgs Parse = NonEmpty AST
 type instance AbsArgs Parse = NonEmpty Text
 type instance LetArgs Parse = NonEmpty (Def Parse)
 type instance CtrArgs Parse = [AST]
+type instance AnnX    Parse = ()
 type instance XExpr   Parse = ASTX
 
 type ASTX = ASTXF AST
@@ -107,10 +109,10 @@ pattern HoleP = ExprX HoleP_
 pattern HoleFP :: ASTF r
 pattern HoleFP = ExprXF HoleP_
 
-{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, ExprXF                               #-}
-{-# COMPLETE Var,  App,  Abs,  Let,   Ctr,  Case,  LetRecP,  PNat,  PList,  PChar,  PStr,  HoleP  #-}
-{-# COMPLETE VarF, AppF, AbsF, LetF , CtrF, CaseF, LetRecFP, PNatF, PListF, PCharF, PStrF, HoleFP #-}
-{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, LetRecFP, PNatF, PListF, PCharF, PStrF, HoleFP #-}
+{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, AnnF, ExprXF                               #-}
+{-# COMPLETE Var,  App,  Abs,  Let,   Ctr,  Case,  Ann,  LetRecP,  PNat,  PList,  PChar,  PStr,  HoleP  #-}
+{-# COMPLETE VarF, AppF, AbsF, LetF , CtrF, CaseF, AnnF, LetRecFP, PNatF, PListF, PCharF, PStrF, HoleFP #-}
+{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, AnnF, LetRecFP, PNatF, PListF, PCharF, PStrF, HoleFP #-}
 
 -- TODO: Implement Substitutable for AST.
 

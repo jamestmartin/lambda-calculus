@@ -1,17 +1,19 @@
 module Ivo.Syntax.Parser
   ( ParseError, parse
-  , DeclOrExprAST, ProgramAST
+  , Declaration, DeclOrExprAST, ProgramAST
   , parseAST, parseDeclOrExpr, parseProgram
-  , astParser, declOrExprParser, programParser
+  , typeParser, schemeParser, astParser, declOrExprParser, programParser
   ) where
 
 import Ivo.Syntax.Base
 
+import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty (fromList)
 import Data.Text qualified as T
 import Prelude hiding (succ, either)
 import Text.Parsec hiding (label, token, spaces)
 import Text.Parsec qualified
+import Text.Parsec.Expr
 import Text.Parsec.Text (Parser)
 
 spaces :: Parser ()
@@ -36,7 +38,7 @@ token :: Char -> Parser ()
 token ch = label [ch] $ char ch *> spaces
 
 keywords :: [Text]
-keywords = ["let", "in", "Left", "Right", "S", "Z", "Char"]
+keywords = ["let", "in", "Left", "Right", "S", "Z", "forall", "Char", "Void", "Unit", "Nat", "Char"]
 
 -- | A keyword is an exact string which is not part of an identifier.
 keyword :: Text -> Parser ()
@@ -56,6 +58,9 @@ identifier = label "identifier" $ do
 variable :: Parser AST
 variable = label "variable" $ Var <$> identifier
 
+tvariable :: Parser Type
+tvariable = label "variable" $ TVar <$> identifier
+
 many1' :: Parser a -> Parser (NonEmpty a)
 many1' p = fromList <$> many1 p
 
@@ -65,22 +70,29 @@ many2 p = (,) <$> p <*> many1' p
 grouping :: Parser AST
 grouping = label "grouping" $ between (token '(') (token ')') ambiguous
 
+tgrouping :: Parser Type
+tgrouping = label "grouping" $ between (token '(') (token ')') tambiguous
+
 application :: Parser AST
-application = uncurry App <$> many2 block
+application = label "application" $ uncurry App <$> many2 block
+
+tapplication :: Parser Type
+tapplication = label "application" $ uncurry tapp' <$> many2 tblock
+  where tapp' t1 (t2 :| ts) = tapp (t1 : t2 : ts)
 
 abstraction :: Parser AST
 abstraction = label "lambda abstraction" $ Abs <$> between lambda (token '.') (many1' identifier) <*> ambiguous
   where lambda = label "lambda" $ (char '\\' <|> char 'λ') *> spaces
 
 definition :: Parser (Def Parse)
-definition = do
+definition = label "definition" $ do
   name <- identifier
   token '='
   value <- ambiguous
   pure (name, value)
 
 let_ :: Parser AST
-let_ = letrecstar <|> letstar
+let_ = label "let expression" $ letrecstar <|> letstar
   where
     letrecstar = LetRecP <$> between (try (keyword "letrec")) (keyword "in") definition <*> ambiguous
     letstar = Let <$> between (keyword "let") (keyword "in") definitions <*> ambiguous
@@ -89,7 +101,7 @@ let_ = letrecstar <|> letstar
     definitions = fromList <$> sepBy1 definition (token ';')
 
 ctr :: Parser AST
-ctr = pair <|> unit <|> either <|> nat <|> list <|> str
+ctr = label "data constructor" $ pair <|> unit <|> either <|> nat <|> list <|> str
   where
     unit, pairCtr, tuple, either, left, right,
       zero, succ, natLit, consCtr, cons, charCtr, charLit, strLit :: Parser AST
@@ -166,8 +178,61 @@ case_ = label "case patterns" $ do
   token '}'
   pure $ Case pats
 
+ann :: Parser AST
+ann = label "type annotation" $ do
+  e <- block
+  token ':'
+  t <- tambiguous
+  pure (Ann () e t)
+
 hole :: Parser AST
 hole = label "hole" $ HoleP <$ token '_'
+
+tlist :: Parser Type
+tlist = between (token '[') (token ']') $ ((TApp TList <$> tambiguous) <|> pure TList)
+
+tinfix :: Parser Type
+tinfix = buildExpressionParser ttable tblock
+  where
+    ttable :: [[Operator Text () Identity Type]]
+    ttable = [ [Infix (binop TAbs  <$ arrSym)    AssocRight]
+             , [Infix (binop TProd <$ token '*') AssocRight]
+             , [Infix (binop TSum  <$ token '+') AssocRight]
+             ]
+
+    arrSym :: Parser ()
+    arrSym = token '→' <|> keyword "->"
+
+    binop :: Type -> Type -> Type -> Type
+    binop c t1 t2 = TApp (TApp c t1) t2
+
+tctr :: Parser Type
+tctr = tlist <|> tunit <|> tvoid <|> tnat <|> tchar
+  where
+    tunit = TUnit <$ (keyword "Unit" <|> keyword "⊤")
+    tvoid = TVoid <$ (keyword "Void" <|> keyword "⊥")
+    tnat  = TNat  <$ (keyword "Nat"  <|> keyword "ℕ")
+    tchar = TChar <$  keyword "Char"
+
+tfinite :: Parser Type
+tfinite = tvariable <|> tlist <|> tctr <|> tgrouping
+
+tblock :: Parser Type
+tblock = tfinite
+
+tambiguous :: Parser Type
+tambiguous = try tinfix <|> try tapplication <|> tblock
+
+tforall :: Parser Scheme
+tforall = do
+  keyword "forall" <|> token '∀'
+  names <- many1 (identifier <* spaces)
+  token '.'
+  ty <- tambiguous
+  pure $ TForall names ty
+
+scheme :: Parser Scheme
+scheme = tforall <|> (TForall [] <$> tambiguous)
 
 -- | Guaranteed to consume a finite amount of input
 finite :: Parser AST
@@ -179,7 +244,13 @@ block = label "block expression" $ abstraction <|> let_ <|> finite
 
 -- | Not guaranteed to consume input at all, may continue until it reaches a terminator
 ambiguous :: Parser AST
-ambiguous = label "any expression" $ try application <|> block
+ambiguous = label "any expression" $ try ann <|> try application <|> block
+
+typeParser :: Parser Type
+typeParser = tambiguous
+
+schemeParser :: Parser Scheme
+schemeParser = scheme
 
 astParser :: Parser AST
 astParser = ambiguous
@@ -187,18 +258,26 @@ astParser = ambiguous
 parseAST :: Text -> Either ParseError AST
 parseAST = parse (spaces *> ambiguous <* eof) "input"
 
-type Declaration = (Text, AST)
+type Declaration = (Text, Maybe Type, AST)
+
+definitionAnn :: Parser Declaration
+definitionAnn = do
+  name <- identifier
+  ty <- optionMaybe $ token ':' *> tambiguous
+  token '='
+  e <- ambiguous
+  pure (name, ty, e)
 
 declaration :: Parser Declaration
 declaration = notFollowedBy (try let_) >> (declrec <|> decl)
   where
     declrec = do
       try $ keyword "letrec"
-      (name, expr) <- definition
-      pure (name, LetRecP (name, expr) (Var name))
+      (name, ty, expr) <- definitionAnn
+      pure (name, ty, LetRecP (name, expr) (Var name))
     decl = do
       keyword "let"
-      definition
+      definitionAnn
 
 -- | A program is a series of declarations and expressions to execute.
 type ProgramAST = [DeclOrExprAST]

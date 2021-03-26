@@ -1,5 +1,5 @@
 module Ivo.Evaluator.Base
-  ( Identity (..)
+  ( Identity (..), Void
   , Expr (..), Ctr (..), Pat, ExprF (..), PatF (..), VoidF, UnitF (..), Text
   , substitute, substitute1, rename, rename1, free, bound, used
   , Eval, EvalExpr, EvalExprF, EvalX, EvalXF (..)
@@ -17,6 +17,7 @@ import Data.Functor.Identity (Identity (..))
 import Data.Functor.Foldable (embed, cata, para)
 import Data.HashMap.Strict qualified as HM
 import Data.Traversable (for)
+import Data.Void (Void)
 
 data Eval
 type EvalExpr = Expr Eval
@@ -24,6 +25,7 @@ type instance AppArgs Eval = EvalExpr
 type instance AbsArgs Eval = Text
 type instance LetArgs Eval = VoidF EvalExpr
 type instance CtrArgs Eval = UnitF EvalExpr
+type instance AnnX    Eval = Void
 type instance XExpr   Eval = EvalX
 
 type EvalX = EvalXF EvalExpr

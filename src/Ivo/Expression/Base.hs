@@ -1,9 +1,11 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 module Ivo.Expression.Base
   ( Text, VoidF, UnitF (..), absurd'
-  , Expr (..), Ctr (..), Pat, Def, AppArgs, AbsArgs, LetArgs, CtrArgs, XExpr
+  , Expr (..), Ctr (..), Pat, Def, AppArgs, AbsArgs, LetArgs, CtrArgs, AnnX, XExpr
   , ExprF (..), PatF (..), DefF (..), AppArgsF, LetArgsF, CtrArgsF, XExprF
+  , Type (..), TypeF (..), Scheme (..), tapp
   , RecursivePhase, projectAppArgs, projectLetArgs, projectCtrArgs, projectXExpr, projectDef
   , embedAppArgs, embedLetArgs, embedCtrArgs, embedXExpr, embedDef
   , Substitutable, free, bound, used, collectVars, rename, rename1
@@ -15,30 +17,34 @@ import Control.Monad.Reader (MonadReader, Reader, runReader, asks, local)
 import Control.Monad.State (MonadState, StateT, evalStateT, state)
 import Control.Monad.Zip (MonadZip, mzipWith)
 import Data.Foldable (fold)
-import Data.Functor.Foldable (Base, Recursive, Corecursive, project, embed)
+import Data.Functor.Foldable (Base, Recursive, Corecursive, project, embed, cata)
+import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
 import Data.HashSet (HashSet)
 import Data.HashSet qualified as HS
-import Data.Kind (Type)
+import Data.Kind qualified as Kind
+import Data.List (foldl1')
 import Data.Stream qualified as S
 import Data.Text (Text)
 import Data.Text qualified as T
 
 data Expr phase
-  -- | A variable: `x`.
+  -- | A variable: @x@.
   = Var !Text
-  -- | Function application: `f x_0 ... x_n`.
+  -- | Function application: @f x_0 ... x_n@.
   | App !(Expr phase) !(AppArgs phase)
-  -- | Lambda abstraction: `λx_0 ... x_n. e`.
+  -- | Lambda abstraction: @λx_0 ... x_n. e@.
   | Abs !(AbsArgs phase) !(Expr phase)
-  -- | Let expression: `let x_0 = v_0 ... ; x_n = v_n in e`.
+  -- | Let expression: @let x_0 = v_0 ... ; x_n = v_n in e@.
   | Let !(LetArgs phase) !(Expr phase)
-  -- | Data constructor, e.g. `(x, y)` or `Left`.
+  -- | Data constructor, e.g. @(x, y)@ or @Left@.
   | Ctr !Ctr !(CtrArgs phase)
   -- | Case expression to pattern match against a value,
-  -- e.g. `case { Left x1 -> e1 ; Right x2 -> e2 }`.
+  -- e.g. @case { Left x1 -> e1 ; Right x2 -> e2 }@.
   | Case ![Pat phase]
+  -- | Type annotations: @expr : type@.
+  | Ann !(AnnX phase) !(Expr phase) Type
   -- | Additional phase-specific constructors.
   | ExprX !(XExpr phase)
 
@@ -46,23 +52,30 @@ type family AppArgs phase
 type family AbsArgs phase
 type family LetArgs phase
 type family CtrArgs phase
+type family AnnX    phase
 type family XExpr phase
 
-deriving instance
-  ( Eq (AppArgs phase)
-  , Eq (AbsArgs phase)
-  , Eq (LetArgs phase)
-  , Eq (CtrArgs phase)
-  , Eq (XExpr   phase)
-  ) => Eq (Expr phase)
+class
+  ( c (AppArgs phase)
+  , c (AbsArgs phase)
+  , c (LetArgs phase)
+  , c (CtrArgs phase)
+  , c (AnnX    phase)
+  , c (XExpr   phase)
+  ) => ForallX c phase
 
-deriving instance
-  ( Show (AppArgs phase)
-  , Show (AbsArgs phase)
-  , Show (LetArgs phase)
-  , Show (CtrArgs phase)
-  , Show (XExpr   phase)
-  ) => Show (Expr phase)
+instance
+  ( c (AppArgs phase)
+  , c (AbsArgs phase)
+  , c (LetArgs phase)
+  , c (CtrArgs phase)
+  , c (AnnX    phase)
+  , c (XExpr   phase)
+  ) => ForallX c phase
+
+deriving instance ForallX Eq phase  => Eq (Expr phase)
+
+deriving instance ForallX Show phase => Show (Expr phase)
 
 -- | Data constructors (used in pattern matching and literals).
 data Ctr
@@ -94,6 +107,41 @@ data PatF r = Pat { patCtr :: !Ctr, patNames :: ![Text], patBody :: !r }
 -- | A definition, mapping a name to a value.
 type Def phase = (Text, Expr phase)
 
+-- | A monomorphic type.
+data Type
+  -- | Type variable.
+  = TVar Text
+  -- | Type application.
+  | TApp Type Type
+  -- | The function type.
+  | TAbs
+  -- | The product type.
+  | TProd
+  -- | The sum type.
+  | TSum
+  -- | The unit type.
+  | TUnit
+  -- | The empty type.
+  | TVoid
+  -- | The type of natural numbers.
+  | TNat
+  -- | The type of lists.
+  | TList
+  -- | The type of characters.
+  | TChar
+  deriving (Eq, Show)
+
+tapp :: [Type] -> Type
+tapp []  = error "Empty type applications are not permitted"
+tapp [t] = t
+tapp ts  = foldl1' TApp ts
+
+-- | A polymorphic type.
+data Scheme
+  -- | Universally quantified type variables.
+  = TForall [Text] Type
+  deriving (Eq, Show)
+
 ---
 --- Base functor boilerplate for recursion-schemes
 ---
@@ -105,14 +153,29 @@ data ExprF phase r
   | LetF !(LetArgsF phase r) r
   | CtrF Ctr (CtrArgsF phase r)
   | CaseF [PatF r]
+  | AnnF !(AnnX phase) r Type
   | ExprXF !(XExprF phase r)
 
 type instance Base (Expr phase) = ExprF phase
 
-type family AppArgsF phase :: Type -> Type
-type family LetArgsF phase :: Type -> Type
-type family CtrArgsF phase :: Type -> Type
-type family XExprF phase :: Type -> Type
+type family AppArgsF phase :: Kind.Type -> Kind.Type
+type family LetArgsF phase :: Kind.Type -> Kind.Type
+type family CtrArgsF phase :: Kind.Type -> Kind.Type
+type family XExprF   phase :: Kind.Type -> Kind.Type
+
+class
+  ( c (AppArgsF phase)
+  , c (LetArgsF phase)
+  , c (CtrArgsF phase)
+  , c (XExprF   phase)
+  ) => ForallXF c phase
+
+instance
+  ( c (AppArgsF phase)
+  , c (LetArgsF phase)
+  , c (CtrArgsF phase)
+  , c (XExprF   phase)
+  ) => ForallXF c phase
 
 data DefF r = Def !Text !r
   deriving (Eq, Functor, Foldable, Traversable, Show)
@@ -128,12 +191,7 @@ data VoidF a
 absurd' :: VoidF a -> b
 absurd' x = case x of {}
 
-instance
-  ( Functor (AppArgsF phase)
-  , Functor (LetArgsF phase)
-  , Functor (CtrArgsF phase)
-  , Functor (XExprF phase)
-  ) => Functor (ExprF phase) where
+instance ForallXF Functor phase  => Functor (ExprF phase) where
   fmap f = \case
     VarF n -> VarF n
     AppF ef exs -> AppF (f ef) (fmap f exs)
@@ -141,14 +199,10 @@ instance
     LetF ds e -> LetF (fmap f ds) (f e)
     CtrF c es -> CtrF c (fmap f es)
     CaseF ps -> CaseF (fmap (fmap f) ps)
+    AnnF x e t -> AnnF x (f e) t
     ExprXF q -> ExprXF (fmap f q)
 
-instance
-  ( Foldable (AppArgsF phase)
-  , Foldable (LetArgsF phase)
-  , Foldable (CtrArgsF phase)
-  , Foldable (XExprF   phase)
-  ) => Foldable (ExprF phase) where
+instance ForallXF Foldable phase => Foldable (ExprF phase) where
   foldMap f = \case
     VarF _ -> mempty
     AppF ef exs -> f ef <> foldMap f exs
@@ -156,14 +210,10 @@ instance
     LetF ds e -> foldMap f ds <> f e
     CtrF _ es -> foldMap f es
     CaseF ps -> foldMap (foldMap f) ps
+    AnnF _ e _ -> f e
     ExprXF q -> foldMap f q
 
-instance
-  ( Traversable (AppArgsF phase)
-  , Traversable (LetArgsF phase)
-  , Traversable (CtrArgsF phase)
-  , Traversable (XExprF   phase)
-  ) => Traversable (ExprF phase) where
+instance ForallXF Traversable phase => Traversable (ExprF phase) where
   traverse f = \case
     VarF n -> pure $ VarF n
     AppF ef exs -> AppF <$> f ef <*> traverse f exs
@@ -171,6 +221,7 @@ instance
     LetF ds e -> LetF <$> traverse f ds <*> f e
     CtrF c es -> CtrF c <$> traverse f es
     CaseF ps -> CaseF <$> traverse (traverse f) ps
+    AnnF x e t -> (\e' -> AnnF x e' t) <$> f e
     ExprXF q -> ExprXF <$> traverse f q
 
 class Functor (ExprF phase) => RecursivePhase phase where
@@ -226,6 +277,7 @@ instance RecursivePhase phase => Recursive (Expr phase) where
     Let ds e -> LetF (projectLetArgs ds) e
     Ctr c es -> CtrF c (projectCtrArgs es)
     Case ps -> CaseF ps
+    Ann x e t -> AnnF x e t
     ExprX q -> ExprXF (projectXExpr q)
 
 instance RecursivePhase phase => Corecursive (Expr phase) where
@@ -236,7 +288,10 @@ instance RecursivePhase phase => Corecursive (Expr phase) where
     LetF ds e -> Let (embedLetArgs ds) e
     CtrF c es -> Ctr c (embedCtrArgs es)
     CaseF ps -> Case ps
+    AnnF x e t -> Ann x e t
     ExprXF q -> ExprX (embedXExpr q)
+
+makeBaseFunctor ''Type
 
 ---
 --- End base functor boilerplate.
@@ -282,6 +337,34 @@ class Substitutable e where
 
   unsafeSubstitute1 :: Text -> e -> e -> e
   unsafeSubstitute1 n e = unsafeSubstitute (HM.singleton n e)
+
+instance Substitutable Type where
+  collectVars withVar _ = cata \case
+    TVarF n -> withVar n
+    t -> fold t
+
+  -- /All/ variables in a monomorphic type are free.
+  rename _ t = t
+
+  -- No renaming step is necessary.
+  substitute substs = cata \case
+    TVarF n -> HM.findWithDefault (TVar n) n substs
+    e -> embed e
+
+  unsafeSubstitute = substitute
+
+instance Substitutable Scheme where
+  collectVars withVar withBinder (TForall names t) =
+    foldMap withBinder names $ collectVars withVar withBinder t
+
+  rename = runRenamer \badNames (TForall names t) ->
+    uncurry TForall <$> replaceNames badNames names (pure t)
+
+  -- I took a shot at implementing this but found it to be quite difficult
+  -- because merging the foralls is tricky.
+  -- It's not undoable, but it wasn't worth my further time investment
+  -- seeing as this function isn't currently used anywhere.
+  unsafeSubstitute = error "Substitution for schemes not yet implemented"
 
 --
 -- These primitives are likely to be useful for implementing `rename`.

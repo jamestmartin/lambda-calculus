@@ -114,8 +114,8 @@ commandParser = do
 
 class MonadState AppState m => MonadApp m where
   parsed        :: Either ParseError a -> m a
-  typecheckDecl :: Text -> CheckExpr -> m (Maybe Scheme)
-  typecheckExpr ::         CheckExpr -> m (Maybe Scheme)
+  typecheckDecl :: Maybe Type -> Text -> CheckExpr -> m (Maybe Scheme)
+  typecheckExpr ::                       CheckExpr -> m (Maybe Scheme)
   execute       :: CheckExpr -> m EvalExpr
 
 type AppM = ExceptT Text (StateT AppState (InputT IO))
@@ -127,8 +127,8 @@ instance MonadApp AppM where
   parsed (Left err) = throwError $ T.pack $ show err
   parsed (Right ok) = pure ok
 
-  typecheckDecl = typecheck . Just
-  typecheckExpr = typecheck Nothing
+  typecheckDecl ty = typecheck ty    . Just
+  typecheckExpr    = typecheck Nothing Nothing
 
   execute checkExpr = do
     defs <- gets definitions
@@ -148,10 +148,10 @@ instance MonadApp AppM where
         liftInput $ mapM_ (outputTextLn . unparseEval) trace
         pure value
 
-typecheck :: Maybe Text -> CheckExpr -> AppM (Maybe Scheme)
-typecheck decl expr = do
+typecheck :: Maybe Type -> Maybe Text -> CheckExpr -> AppM (Maybe Scheme)
+typecheck tann decl expr = do
   defs <- gets definitions
-  let type_ = infer $ substitute defs expr
+  let type_ = maybe infer check tann $ substitute defs expr
   checkOpts <- gets checkOptions
   if shouldTypecheck checkOpts
     then case type_ of
@@ -184,10 +184,10 @@ define name expr = modify \appState ->
   in appState { definitions = HM.insert name expr' $ definitions appState }
 
 runDeclOrExpr :: MonadApp m => DeclOrExprAST -> m ()
-runDeclOrExpr (Left (name, exprAST)) = do
+runDeclOrExpr (Left (name, ty, exprAST)) = do
   defs <- gets definitions
   let expr = substitute defs $ ast2check exprAST
-  _ <- typecheckDecl name expr
+  _ <- typecheckDecl ty name expr
   define name expr
 runDeclOrExpr (Right exprAST) = do
   defs <- gets definitions

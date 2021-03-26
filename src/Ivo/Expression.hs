@@ -1,5 +1,6 @@
 module Ivo.Expression
   ( Expr (..), Ctr (..), Pat, ExprF (..), PatF (..), DefF (..), VoidF, UnitF (..), Text
+  , Type (..), TypeF (..), Scheme (..), tapp
   , substitute, substitute1, rename, free, bound, used
   , Eval, EvalExpr, EvalX, EvalXF (..), Identity (..)
   , pattern AppFE, pattern CtrE, pattern CtrFE,
@@ -10,7 +11,6 @@ module Ivo.Expression
   , Check, CheckExpr, CheckExprF, CheckX, CheckXF (..)
   , pattern AppFC, pattern CtrC, pattern CtrFC, pattern CallCCC, pattern CallCCFC
   , pattern FixC, pattern FixFC, pattern HoleC, pattern HoleFC
-  , Type (..), TypeF (..), Scheme (..), tapp
   , ast2check, ast2eval, check2eval, check2ast, eval2ast
   , builtins
   ) where
@@ -41,6 +41,7 @@ ast2check = substitute builtins . cata \case
   LetRecFP (nx, ex) e -> App (Abs nx e) (App FixC (Abs nx ex))
   CtrF ctr es -> foldl' App (CtrC ctr) es
   CaseF ps -> Case ps
+  AnnF () e t -> Ann () e t
   PNatF n -> int2ast n
   PListF es -> mkList es
   PStrF s -> mkList $ map (App (CtrC CChar) . int2ast . fromEnum) $ unpack s
@@ -63,6 +64,7 @@ check2eval = cata \case
   LetF (Def nx ex) e -> App (Abs nx e) ex
   CtrFC ctr -> CtrE ctr
   CaseF ps -> Case ps
+  AnnF () e _ -> e
   CallCCFC -> CallCCE
   FixFC -> z
   HoleFC -> omega
@@ -88,6 +90,7 @@ check2ast = hoist go . rename (HM.keysSet builtins)
       LetF (Def nx ex) e -> LetFP ((nx, ex) :| []) e
       CtrFC ctr -> CtrF ctr []
       CaseF ps -> CaseF ps
+      AnnF () e t -> AnnF () e t
       CallCCFC-> VarF "callcc"
       FixFC -> VarF "fix"
       HoleFC -> HoleFP
