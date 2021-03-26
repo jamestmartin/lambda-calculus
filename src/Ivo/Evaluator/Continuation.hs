@@ -1,9 +1,9 @@
-module LambdaCalculus.Evaluator.Continuation
+module Ivo.Evaluator.Continuation
   ( Continuation, continue, continue1
   , ContinuationCrumb (..)
   ) where
 
-import LambdaCalculus.Evaluator.Base
+import Ivo.Evaluator.Base
 
 import Data.List (foldl')
 

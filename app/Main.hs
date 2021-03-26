@@ -1,6 +1,6 @@
 module Main (main) where
 
-import LambdaCalculus
+import Ivo
 
 import Control.Exception (IOException, catch)
 import Data.Maybe (isJust)

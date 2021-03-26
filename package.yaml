@@ -1,13 +1,13 @@
-name:                jtm-lambda-calculus
+name:                ivo
 version:             0.1.0.0
-github:              "jamestmartin/lambda-calculus"
+github:              "ivolang/ivo"
 license:             GPL-3
 author:              "James Martin"
 maintainer:          "james@jtmar.me"
-copyright:           "2019-2020 James Martin"
-synopsis:            "A simple implementation of the lambda calculus."
-category:            LambdaCalculus
-description:         Please see the README on GitHub at <https://github.com/jamestmartin/lambda-calculus#readme>
+copyright:           "2019-2021 James Martin"
+synopsis:            "A useless programming language for useless people."
+category:            Language
+description:         Please see the README on GitHub at <https://github.com/ivolang/ivo#readme>
 
 extra-source-files:
 - README.md
@@ -63,7 +63,7 @@ library:
   - -Wno-missing-import-lists
 
 executables:
-  jtm-lambda-calculus:
+  ivo:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -75,12 +75,12 @@ executables:
     - -Wno-monomorphism-restriction
     - -Wno-unused-do-bind
     dependencies:
-    - jtm-lambda-calculus
+    - ivo
     - exceptions >= 0.10.4 && < 0.11
     - haskeline >= 0.8 && < 1
 
 tests:
-  jtm-lambda-calculus-test:
+  ivo-test:
     main: Spec.hs
     source-dirs: test
     ghc-options:
@@ -89,6 +89,6 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - jtm-lambda-calculus
+    - ivo
     - tasty >= 1.2 && < 2
     - tasty-hunit >= 0.10 && < 0.11

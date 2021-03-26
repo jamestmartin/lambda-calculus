@@ -1,6 +1,6 @@
-module LambdaCalculus.Syntax.Printer (unparseAST) where
+module Ivo.Syntax.Printer (unparseAST) where
 
-import LambdaCalculus.Syntax.Base
+import Ivo.Syntax.Base
 
 import Data.Functor.Base (NonEmptyF (NonEmptyF))
 import Data.Functor.Foldable (cata)

@@ -1,9 +1,9 @@
-module LambdaCalculus.Types
-  ( module LambdaCalculus.Types.Base
+module Ivo.Types
+  ( module Ivo.Types.Base
   , infer
   ) where
 
-import LambdaCalculus.Types.Base
+import Ivo.Types.Base
 
 import Control.Applicative ((<|>))
 import Control.Monad (when)

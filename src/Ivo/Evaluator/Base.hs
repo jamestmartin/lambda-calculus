@@ -1,4 +1,4 @@
-module LambdaCalculus.Evaluator.Base
+module Ivo.Evaluator.Base
   ( Identity (..)
   , Expr (..), Ctr (..), Pat, ExprF (..), PatF (..), VoidF, UnitF (..), Text
   , substitute, substitute1, rename, rename1, free, bound, used
@@ -7,7 +7,7 @@ module LambdaCalculus.Evaluator.Base
   , pattern ContE, pattern ContFE, pattern CallCCE, pattern CallCCFE
   ) where
 
-import LambdaCalculus.Expression.Base
+import Ivo.Expression.Base
 
 import Control.Monad (forM)
 import Control.Monad.Reader (asks)

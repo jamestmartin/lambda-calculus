@@ -1,4 +1,4 @@
-module LambdaCalculus.Evaluator
+module Ivo.Evaluator
   ( Expr (..), Ctr (..), Pat, ExprF (..), PatF (..), VoidF, UnitF (..), Text
   , Eval, EvalExpr, EvalX, EvalXF (..)
   , pattern AppFE, pattern CtrE, pattern CtrFE
@@ -6,8 +6,8 @@ module LambdaCalculus.Evaluator
   , eval, evalTrace, evalTraceGlobal
   ) where
 
-import LambdaCalculus.Evaluator.Base
-import LambdaCalculus.Evaluator.Continuation
+import Ivo.Evaluator.Base
+import Ivo.Evaluator.Continuation
 
 import Control.Monad.Except (MonadError, ExceptT, throwError, runExceptT)
 import Control.Monad.Loops (iterateM_)

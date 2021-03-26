@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
-module LambdaCalculus.Expression.Base
+module Ivo.Expression.Base
   ( Text, VoidF, UnitF (..), absurd'
   , Expr (..), Ctr (..), Pat, Def, AppArgs, AbsArgs, LetArgs, CtrArgs, XExpr
   , ExprF (..), PatF (..), DefF (..), AppArgsF, LetArgsF, CtrArgsF, XExprF

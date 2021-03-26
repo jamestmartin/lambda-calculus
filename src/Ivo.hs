@@ -1,15 +1,15 @@
-module LambdaCalculus
-  ( module LambdaCalculus.Evaluator
-  , module LambdaCalculus.Expression
-  , module LambdaCalculus.Syntax
-  , module LambdaCalculus.Types
+module Ivo
+  ( module Ivo.Evaluator
+  , module Ivo.Expression
+  , module Ivo.Syntax
+  , module Ivo.Types
   , parseCheck, parseEval, unparseCheck, unparseEval
   ) where
 
-import LambdaCalculus.Evaluator
-import LambdaCalculus.Expression
-import LambdaCalculus.Syntax
-import LambdaCalculus.Types
+import Ivo.Evaluator
+import Ivo.Expression
+import Ivo.Syntax
+import Ivo.Types
 
 parseCheck :: Text -> Either ParseError CheckExpr
 parseCheck = fmap ast2check . parseAST

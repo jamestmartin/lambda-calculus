@@ -1,4 +1,4 @@
-module LambdaCalculus.Expression
+module Ivo.Expression
   ( Expr (..), Ctr (..), Pat, ExprF (..), PatF (..), DefF (..), VoidF, UnitF (..), Text
   , substitute, substitute1, rename, free, bound, used
   , Eval, EvalExpr, EvalX, EvalXF (..), Identity (..)
@@ -15,9 +15,9 @@ module LambdaCalculus.Expression
   , builtins
   ) where
 
-import LambdaCalculus.Evaluator.Base
-import LambdaCalculus.Syntax.Base
-import LambdaCalculus.Types.Base
+import Ivo.Evaluator.Base
+import Ivo.Syntax.Base
+import Ivo.Types.Base
 
 import Data.Functor.Foldable (cata, hoist)
 import Data.HashMap.Strict (HashMap)

@@ -1,33 +1,59 @@
-# Lambda Calculus
-This is a simple programming language derived from lambda calculus,
-using the Hindley-Milner type system, plus `letrec` and `callcc`.
+# The Ivo Programming Language
+Ivo (IPA: /aɪvoʊ/) is a programming language intended
+as a tool for its author to explore interesting programming language features.
 
-## Usage
-Run the program using `stack run` (or run the tests with `stack test`).
+Ivo is currently in a very early stage of development
+and most likely is not of any practical or academic interest;
+however, that may change in the future.
+This README serves to document the language as it currently stands,
+not what the language one day hopes to be.
 
-Type in your expression at the prompt: `>> `.
-Yourexpression will be evaluated to normal form using the call-by-value evaluation strategy and then printed.
+## Using the Ivo interpreter
+You may run the Ivo interpreter using `stack run`;
+the interpreter does not take any arguments.
+
+Type in your command, definition, or expression at the prompt: `>> `.
+Expressions will be typechecked, evaluated using call-by-value, and then printed.
 
 Exit the prompt with `Ctrl-d` (or equivalent).
 
-## Commands
-Instead of entering an expression in the REPL, you may enter a command.
+### Interpreter commands
 These commands are available:
 
-* `:load <filename>`: Execute a program in the interpreter, importing all definitions.
 * `:clear`: Clear all of your variable definitions.
+
+* `:load <filename>`:
+
+  Execute a file containing Ivo definitions and expressions in the interpreter.
+  Variables already defined in the interpreter will be defined in the file;
+  variables defined by the file will be defined in the interpreter.
+
+  The filename may contain spaces, but trailing whitespace will be trimmed.
+
 * `:check <on/off> <always/decls/off>`:
-  * If the first argument is `off`, then expressions will be evaluated even if they do not typecheck.
-  * If the second argument is `always`, inferred types will always be printed.
-    If it is `decls`, then only declarations will have their inferred types printed.
-    Otherwise, the type of expressions is never printed.
+
+  * If the first argument is `on`,
+    then expressions will only be evaluated and definitions will only be added
+    only if typechecking succeeds.
+
+  * If the second argument is `always`, then inferred types will always be printed;
+    if it is `decls`, then only the inferred types of declarations will be printed;
+    otherwise, the type of expressions are never printed.'
+
   * The default values are `on` `decls`.
+
 * `:trace <off/local/global>`:
-  * If the argument is `local`, intermediate expressions will be printed as the evaluator evaluates them.
-  * If the argument is `global`, the *entire* expression will be printed each evaluator step.
+
+  * If the argument is `local`, intermediate expressions will be printed
+    as they are evaluated;
+
+  * If the argument is `global`, the *entire* expression will be printed
+    with each evaluation step.
+
   * The default value is `off`.
 
-## Syntax
+## The Ivo language
+### Syntax
 The parser's error messages currently are virtually useless, so be very careful with your syntax.
 
 * Variable names: any sequence of letters.
@@ -55,7 +81,7 @@ allow declarations (`let(rec) x = E` without multiple definitions `in ...`),
 which make your definitions available for the rest of the program's execution.
 You must separate your declarations and expressions with `;`.
 
-## Types
+### Types
 Types are checked/inferred using the Hindley-Milner type inference algorithm.
 
 * Functions: `a -> b` (constructed by `\x. e`)
@@ -68,18 +94,19 @@ Types are checked/inferred using the Hindley-Milner type inference algorithm.
 * Characters: `Char` (constructed by `Char`, which takes a `Nat`)
 * Universal quantification (forall): `∀a b. t`
 
-## Builtins
+### Builtins
 Builtins are variables that correspond with a built-in language feature
 that cannot be replicated by user-written code.
 They still are just variables though; they do not receive special syntactic treatment.
 
-* `callcc : ∀a b. (((a -> b) -> a) -> a)`: [the call-with-current-continuation control flow operator](https://en.wikipedia.org/wiki/Call-with-current-continuation).
+* `callcc : ∀a b. (((a -> b) -> a) -> a)`:
+  [the call-with-current-continuation control flow operator](https://en.wikipedia.org/wiki/Call-with-current-continuation).
 
 Continuations are printed as `λ!. ... ! ...`, like a lambda abstraction
 with an argument named `!` which is used exactly once;
 however, continuations are *not* the same as lambda abstractions
 because they perform the side effect of modifying the current continuation,
-and this is *not* valid syntax you can input into the REPL.
+and this is *not* valid syntax you can enter into the REPL.
 
-## Example code
-You can see some example code in `examples.lc`.
+### Example code
+You can see some example code in `examples/examples.ivo`.

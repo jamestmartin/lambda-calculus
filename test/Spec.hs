@@ -1,4 +1,4 @@
-import LambdaCalculus
+import Ivo
 
 import Test.Tasty
 import Test.Tasty.HUnit

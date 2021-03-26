@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module LambdaCalculus.Types.Base
+module Ivo.Types.Base
   ( Identity (..)
   , Expr (..), Ctr (..), Pat, ExprF (..), PatF (..), VoidF, UnitF (..), Text
   , substitute, substitute1, rename, rename1, free, bound, used
@@ -24,7 +24,7 @@ import Data.HashMap.Strict qualified as HM
 import Data.List (foldl1')
 import Data.Text qualified as T
 import Data.Traversable (for)
-import LambdaCalculus.Expression.Base
+import Ivo.Expression.Base
 
 data Check
 type CheckExpr = Expr Check

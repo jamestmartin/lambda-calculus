@@ -1,4 +1,4 @@
-module LambdaCalculus.Syntax.Base
+module Ivo.Syntax.Base
   ( Expr (..), ExprF (..), Ctr (..), Pat, Def, DefF (..), PatF (..), VoidF, Text, NonEmpty (..)
   , substitute, substitute1, rename, rename1, free, bound, used
   , Parse, AST, ASTF, ASTX, ASTXF (..), NonEmptyDefFs (..)
@@ -8,7 +8,7 @@ module LambdaCalculus.Syntax.Base
   , simplify
   ) where
 
-import LambdaCalculus.Expression.Base
+import Ivo.Expression.Base
 
 import Data.Functor.Foldable (embed, project)
 import Data.List.NonEmpty (NonEmpty (..), toList)

@@ -1,11 +1,11 @@
-module LambdaCalculus.Syntax.Parser
+module Ivo.Syntax.Parser
   ( ParseError, parse
   , DeclOrExprAST, ProgramAST
   , parseAST, parseDeclOrExpr, parseProgram
   , astParser, declOrExprParser, programParser
   ) where
 
-import LambdaCalculus.Syntax.Base
+import Ivo.Syntax.Base
 
 import Data.List.NonEmpty (fromList)
 import Data.Text qualified as T
