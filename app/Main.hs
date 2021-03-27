@@ -1,237 +1,172 @@
 module Main (main) where
 
+import Command
+import Flags
+import MonadApp
+
 import Ivo
 
 import Control.Exception (IOException, catch)
-import Data.Maybe (isJust)
-import Control.Monad (when)
-import Control.Monad.Catch (MonadMask)
-import Control.Monad.Except (MonadError, ExceptT, runExceptT, throwError, liftEither)
-import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad (when, zipWithM)
+import Control.Monad.Except (throwError, liftEither)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Loops (whileJust_)
-import Control.Monad.State (MonadState, StateT, evalStateT, gets, modify)
+import Control.Monad.State (gets, modify')
 import Control.Monad.Trans (lift)
-import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
+import Data.Maybe (isJust, fromJust)
 import Data.Text qualified as T
-import System.Console.Haskeline
-  ( InputT, runInputT, defaultSettings
-  , outputStrLn, getInputLine, handleInterrupt, withInterrupt
-  )
-import Text.Parsec
-import Text.Parsec.Text (Parser)
+import Data.Text.IO (readFile)
+import Prelude hiding (readFile)
+import System.Console.Haskeline (getInputLine)
 
-outputTextLn :: MonadIO m => Text -> InputT m ()
-outputTextLn = outputStrLn . T.unpack
+main :: IO ()
+main = do
+  action <- getAction
+  case action of
+    PrintHelp -> putStrLn usageMessage
+    PrintVersion -> putStrLn "Ivo 0.1.0.0"
+    Interpreter ProgramOpts { pInterpreterOpts, loadFiles, mainFile } -> do
+      -- read the file contents first so we can print errors right away
+      mMainContents <- mapM readArgFile mainFile
+      filesContents <- mapM readArgFile loadFiles
+      runAppM pInterpreterOpts do
+        -- then parse
+        mMain <- mapM (parseProgramHandleErrors $ fromJust mainFile) mMainContents
+        case mMain of
+          Just mainAST
+            | any (\(name, _, _) -> name == "main") mainAST -> pure ()
+            | otherwise -> throwError "File passed to `-c` does not contain a main function."
+          Nothing -> pure ()
 
--- | Immediately quit the program when interrupted
--- without performing any additional actions.
--- (Without this, it will print an extra newline for some reason.)
-justDie :: (MonadIO m, MonadMask m) => InputT m () -> InputT m ()
-justDie = handleInterrupt (pure ()) . withInterrupt
+        files <- zipWithM parseProgramHandleErrors loadFiles filesContents
+        -- and only finally interpret
+        mapM_ loadFile files
+        maybe repl runProgram mMain
 
-data AppState = AppState
-  { traceOptions :: TraceOptions
-  , checkOptions :: CheckOptions
-  , definitions  :: HashMap Text CheckExpr
-  }
-
-data TraceOptions
-  -- | Print the entire expression in traces.
-  = TraceGlobal
-  -- | Print only the modified part of the expression in traces.
-  | TraceLocal
-  -- | Do not trace evaluation.
-  | TraceOff
-
-data CheckOptions = CheckOptions
-  -- | Require that an expression typechecks to run it.
-  { shouldTypecheck :: Bool
-  -- | Print the inferred type of an expressions.
-  , shouldPrintType :: CheckPrintOptions
-  }
-
-data CheckPrintOptions = PrintAlways | PrintDecls | PrintOff
-  deriving Eq
-
-shouldPrintTypeErrorsQ :: Bool -> CheckOptions -> Bool
-shouldPrintTypeErrorsQ isDecl opts
-  =  shouldTypecheck opts
-  || shouldPrintTypeQ isDecl opts
-
-shouldPrintTypeQ :: Bool -> CheckOptions -> Bool
-shouldPrintTypeQ isDecl opts
-  =  shouldPrintType opts == PrintAlways
-  || shouldPrintType opts == PrintDecls && isDecl
-
-defaultAppState :: AppState
-defaultAppState = AppState
-  { traceOptions = TraceOff
-  , checkOptions = CheckOptions
-    { shouldTypecheck = True
-    , shouldPrintType = PrintDecls
-    }
-  , definitions = HM.empty
-  }
-
-data Command
-  = Trace TraceOptions
-  | Check CheckOptions
-  | Load FilePath
-  | Clear
-
-commandParser :: Parser Command
-commandParser = do
-  char ':'
-  trace <|> check <|> load <|> clear
   where
-    trace = Trace <$> do
-      try $ string "trace "
-      try traceOff <|> try traceLocal <|> try traceGlobal
-    traceOff = TraceOff <$ string "off"
-    traceLocal = TraceLocal <$ string "local"
-    traceGlobal = TraceGlobal <$ string "global"
+    -- | When reading the file contents of a file passed as an argument,
+    -- we want to print usage information and exit if the file can't be opened.
+    readArgFile :: FilePath -> IO Text
+    readArgFile file = readFile file `catch` handleException
+      where
+        handleException :: IOException -> IO a
+        handleException _ = ioError $ userError $
+          "Could not open file: " ++ file ++ "\n" ++ usageMessage
 
-    check = Check <$> do
-      try $ string "check "
-      spaces
-      tc <- (True <$ try (string "on ")) <|> (False <$ try (string "off "))
-      spaces
-      pr <- try printAlways <|> try printDecls <|> try printOff
-      pure $ CheckOptions tc pr
-    printAlways = PrintAlways <$ string "always"
-    printDecls = PrintDecls <$ string "decls"
-    printOff = PrintOff <$ string "off"
+repl :: AppM ()
+repl = lift $ whileJust_ (fmap T.pack <$> lift (getInputLine ">> ")) \inputText ->
+  handleErrors do
+    input <- parseCommandOrTopLevel inputText
+    either runCommand runTopLevel input
 
-    load = Load <$> do
-      try $ string "load "
-      spaces
-      filename <- many1 (noneOf " ")
-      spaces
-      pure filename
+parseCommandOrTopLevel :: Text -> AppM (Either Command TopLevelAST)
+parseCommandOrTopLevel input = do
+  mCmd <- liftParseError $ parseCommand input
+  case mCmd of
+    Nothing -> Right <$> liftParseError (parseTopLevel input)
+    Just cmd -> pure $ Left cmd
 
-    clear = Clear <$ try (string "clear")
+parseProgramHandleErrors :: FilePath -> Text -> AppM ProgramAST
+parseProgramHandleErrors filename = liftParseError . parse programParser filename
 
-class MonadState AppState m => MonadApp m where
-  parsed        :: Either ParseError a -> m a
-  typecheckDecl :: Maybe Type -> Text -> CheckExpr -> m (Maybe Scheme)
-  typecheckExpr ::                       CheckExpr -> m (Maybe Scheme)
-  execute       :: CheckExpr -> m EvalExpr
+liftParseError :: Either ParseError a -> AppM a
+liftParseError result = case result of
+  Left err -> throwError $ T.pack $ show err
+  Right x -> pure x
 
-type AppM = ExceptT Text (StateT AppState (InputT IO))
+runProgram :: ProgramAST -> AppM ()
+runProgram program = do
+  loadFile program
+  runDeclOrExpr (Right (Var "main"))
 
-liftInput :: InputT IO a -> AppM a
-liftInput = lift . lift
+loadFile :: ProgramAST -> AppM ()
+loadFile = mapM_ (\(name, ty, e) -> define name ty $ ast2check e)
 
-instance MonadApp AppM where
-  parsed (Left err) = throwError $ T.pack $ show err
-  parsed (Right ok) = pure ok
+runTopLevel :: TopLevelAST -> AppM ()
+runTopLevel = mapM_ runDeclOrExpr
 
-  typecheckDecl ty = typecheck ty    . Just
-  typecheckExpr    = typecheck Nothing Nothing
+runDeclOrExpr :: Either Declaration AST -> AppM ()
+runDeclOrExpr (Left (name, ty, exprAST)) = do
+  defs <- gets definitions
+  let expr = substitute defs $ ast2check exprAST
+  _ <- typecheckDecl ty name expr
+  define name ty expr
+runDeclOrExpr (Right exprAST) = do
+  defs <- gets definitions
+  let expr = substitute defs $ ast2check exprAST
+  _ <- typecheckExpr expr
+  value <- execute expr
+  liftInput $ outputTextLn $ unparseEval value
+  pure ()
 
-  execute checkExpr = do
-    defs <- gets definitions
-    let expr = check2eval $ substitute defs checkExpr
-    traceOpts <- gets traceOptions
-    case traceOpts of
-      TraceOff -> do
-        let value = eval expr
-        liftInput $ outputTextLn $ unparseEval value
-        pure value
-      TraceLocal -> do
-        let (value, trace) = evalTrace expr
-        liftInput $ mapM_ (outputTextLn . unparseEval) trace
-        pure value
-      TraceGlobal -> do
-        let (value, trace) = evalTraceGlobal expr
-        liftInput $ mapM_ (outputTextLn . unparseEval) trace
-        pure value
+typecheckDecl :: Maybe Type -> Text -> CheckExpr -> AppM Scheme
+typecheckDecl ty = typecheck ty . Just
 
-typecheck :: Maybe Type -> Maybe Text -> CheckExpr -> AppM (Maybe Scheme)
+typecheckExpr :: CheckExpr-> AppM Scheme
+typecheckExpr = typecheck Nothing Nothing
+
+typecheck :: Maybe Type -> Maybe Text -> CheckExpr -> AppM Scheme
 typecheck tann decl expr = do
   defs <- gets definitions
   let type_ = maybe infer check tann $ substitute defs expr
-  checkOpts <- gets checkOptions
-  if shouldTypecheck checkOpts
-    then case type_ of
-      Left err -> throwError $ "Typecheck error: " <> err
-      Right t -> do
-        printType checkOpts t
-        pure $ Just t
-    else do
-      case type_ of
-        Left err ->
-          when (shouldPrintTypeErrorsQ isDecl checkOpts) $
-            liftInput $ outputStrLn $ "Typecheck error: " <> T.unpack err
-        Right t -> printType checkOpts t
-
-      pure Nothing
+  case type_ of
+    Left err -> throwError $ "Typecheck error: " <> err
+    Right t -> do
+      printTypeB <- gets $ shouldPrintType isDecl . interpreterOpts
+      when printTypeB $ outputStderrLn $ prefix <> unparseScheme t
+      pure t
   where
     isDecl = isJust decl
-
-    printType opts t =
-      when (shouldPrintTypeQ isDecl opts) $
-        liftInput $ outputTextLn $ prefix <> unparseScheme t
 
     prefix = case decl of
       Just name -> name <> " : "
       Nothing -> ": "
 
-define :: MonadApp m => Text -> CheckExpr -> m ()
-define name expr = modify \appState ->
-  let expr' = substitute (definitions appState) expr
-  in appState { definitions = HM.insert name expr' $ definitions appState }
-
-runDeclOrExpr :: MonadApp m => DeclOrExprAST -> m ()
-runDeclOrExpr (Left (name, ty, exprAST)) = do
+execute :: CheckExpr -> AppM EvalExpr
+execute checkExpr = do
   defs <- gets definitions
-  let expr = substitute defs $ ast2check exprAST
+  let expr = check2eval $ substitute defs checkExpr
+  traceOpts <- gets (traceOpts . interpreterOpts)
+  case traceOpts of
+    TraceOff -> do
+      let value = eval expr
+      pure value
+    TraceLocal -> do
+      let (value, trace) = evalTrace expr
+      mapM_ (outputStderrLn . unparseEval) trace
+      pure value
+    TraceGlobal -> do
+      let (value, trace) = evalTraceGlobal expr
+      mapM_ (outputStderrLn . unparseEval) trace
+      pure value
+
+define :: Text -> Maybe Type -> CheckExpr -> AppM ()
+define name ty expr = do
   _ <- typecheckDecl ty name expr
-  define name expr
-runDeclOrExpr (Right exprAST) = do
-  defs <- gets definitions
-  let expr = substitute defs $ ast2check exprAST
-  _ <- typecheckExpr expr
-  _ <- execute expr
-  pure ()
+  modify' \appState ->
+    let expr' = substitute (definitions appState) expr
+    in appState { definitions = HM.insert name expr' $ definitions appState }
 
-runProgram :: MonadApp m => ProgramAST -> m ()
-runProgram = mapM_ runDeclOrExpr
+modifyInterpreterOpts :: (InterpreterOpts -> InterpreterOpts) -> AppM ()
+modifyInterpreterOpts f =
+  modify' \app -> app { interpreterOpts = f (interpreterOpts app) }
 
-runCommand :: forall m. (MonadApp m, MonadIO m, MonadError Text m) => Command -> m ()
-runCommand (Trace traceOpts) = modify \app -> app { traceOptions = traceOpts }
-runCommand (Check checkOpts) = modify \app -> app { checkOptions = checkOpts }
-runCommand Clear = modify \app -> app { definitions = HM.empty }
+runCommand :: Command -> AppM ()
+runCommand (Trace traceOpts) =
+  modifyInterpreterOpts \opts -> opts { traceOpts }
+runCommand (PrintType printTypeOpts) =
+  modifyInterpreterOpts \opts -> opts { printTypeOpts }
+runCommand Clear = modify' \app -> app { definitions = HM.empty }
 runCommand (Load filePath) = do
   input <- safeReadFile
-  program <- parsed $ parse programParser filePath input
+  program <- liftParseError $ parse programParser filePath input
   runProgram program
   where
-    safeReadFile :: m Text
+    safeReadFile :: AppM Text
     safeReadFile = liftEither =<< liftIO (
-      (Right . T.pack <$> readFile filePath)
+      (Right <$> readFile filePath)
       `catch` handleException)
 
     handleException :: IOException -> IO (Either Text Text)
     handleException = pure . Left . T.pack . show
-
-parseCommandOrDeclOrExpr :: MonadApp m => Text -> m (Either Command DeclOrExprAST)
-parseCommandOrDeclOrExpr input = parsed $ parse commandOrDeclOrExprParser "input" input
-  where
-    commandOrDeclOrExprParser =
-      (Left <$> try commandParser) <|> (Right <$> declOrExprParser) <* spaces <* eof
-
-main :: IO ()
-main = runInputT defaultSettings $ justDie $ flip evalStateT defaultAppState $
-  whileJust_ (fmap T.pack <$> lift (getInputLine ">> ")) \inputText ->
-    handleErrors do
-      input <- parseCommandOrDeclOrExpr inputText
-      either runCommand runDeclOrExpr input
-  where
-    handleErrors :: ExceptT Text (StateT AppState (InputT IO)) () -> StateT AppState (InputT IO) ()
-    handleErrors m = do
-      result <- runExceptT m
-      case result of
-        Left err -> lift $ outputTextLn err
-        Right _ -> pure ()

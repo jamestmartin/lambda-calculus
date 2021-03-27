@@ -12,30 +12,6 @@ description:         Please see the README on GitHub at <https://github.com/ivol
 extra-source-files:
 - README.md
 
-default-extensions:
-- BlockArguments
-- ConstraintKinds
-- DefaultSignatures
-- EmptyCase
-- EmptyDataDeriving
-- FlexibleContexts
-- FlexibleInstances
-- ImportQualifiedPost
-- InstanceSigs
-- LambdaCase
-- OverloadedStrings
-- PatternSynonyms
-- ScopedTypeVariables
-- StandaloneDeriving
-- ViewPatterns
-# Required for use of the 'trees that grow' pattern
-- MultiParamTypeClasses
-- TypeFamilies
-# Used by recursion-schemes when using template haskell
-- DeriveFoldable
-- DeriveFunctor
-- DeriveTraversable
-
 dependencies:
 - base >= 4.14 && < 5
 - monad-loops >= 0.4.3 && < 0.5
@@ -44,6 +20,29 @@ dependencies:
 - recursion-schemes >= 5.2 && < 6
 - text >= 1.2 && < 2
 - unordered-containers >= 0.2.13 && < 0.3
+
+default-extensions:
+- BlockArguments
+- ConstraintKinds
+- DefaultSignatures
+- DeriveFoldable
+- DeriveFunctor
+- DeriveTraversable
+- EmptyCase
+- EmptyDataDeriving
+- FlexibleContexts
+- FlexibleInstances
+- ImportQualifiedPost
+- InstanceSigs
+- LambdaCase
+- MultiParamTypeClasses
+- NamedFieldPuns
+- OverloadedStrings
+- PatternSynonyms
+- ScopedTypeVariables
+- StandaloneDeriving
+- TypeFamilies
+- ViewPatterns
 
 library:
   source-dirs: src

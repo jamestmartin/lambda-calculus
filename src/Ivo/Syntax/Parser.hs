@@ -1,8 +1,8 @@
 module Ivo.Syntax.Parser
   ( ParseError, parse
-  , Declaration, DeclOrExprAST, ProgramAST
-  , parseAST, parseDeclOrExpr, parseProgram
-  , typeParser, schemeParser, astParser, declOrExprParser, programParser
+  , Declaration, TopLevelAST, ProgramAST
+  , parseAST, parseTopLevel, parseProgram
+  , typeParser, schemeParser, astParser, topLevelParser, programParser
   ) where
 
 import Ivo.Syntax.Base
@@ -280,17 +280,26 @@ declaration = notFollowedBy (try let_) >> (declrec <|> decl)
       definitionAnn
 
 -- | A program is a series of declarations and expressions to execute.
-type ProgramAST = [DeclOrExprAST]
-type DeclOrExprAST = Either Declaration AST
+type ProgramAST = [Declaration]
+type TopLevelAST = [Either Declaration AST]
 
-declOrExprParser :: Parser DeclOrExprAST
-declOrExprParser = try (Left <$> declaration) <|> (Right <$> ambiguous)
+topLevel :: Parser (Either Declaration AST)
+topLevel = try (Left <$> declaration) <|> (Right <$> ambiguous)
+
+topLevelParser :: Parser TopLevelAST
+topLevelParser = spaces *> sepEndBy topLevel (token ';') <* eof
+
+shebang :: Parser ()
+shebang = do
+  try $ keyword "#!"
+  skipMany (noneOf "\n")
+  spaces
 
 programParser :: Parser ProgramAST
-programParser = spaces *> sepEndBy declOrExprParser (token ';') <* eof
+programParser = shebang *> sepEndBy declaration (token ';') <* eof
 
-parseDeclOrExpr :: Text -> Either ParseError DeclOrExprAST
-parseDeclOrExpr = parse declOrExprParser "input"
+parseTopLevel :: Text -> Either ParseError TopLevelAST
+parseTopLevel = parse topLevelParser "input"
 
 parseProgram :: Text -> Either ParseError ProgramAST
 parseProgram = parse programParser "input"

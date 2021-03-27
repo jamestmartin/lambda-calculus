@@ -9,8 +9,11 @@ This README serves to document the language as it currently stands,
 not what the language one day hopes to be.
 
 ## Using the Ivo interpreter
-You may run the Ivo interpreter using `stack run`;
-the interpreter does not take any arguments.
+You may run the Ivo interpreter (`ivo`)
+by installing it to your local path using `stack install`,
+or equivalently, using `stack run [-- args...]`.
+For information about `ivo`'s command line arguments, please refer to `ivo --help`
+(or `stack run -- --help`).
 
 Type in your command, definition, or expression at the prompt: `>> `.
 Expressions will be typechecked, evaluated using call-by-value, and then printed.
@@ -30,17 +33,13 @@ These commands are available:
 
   The filename may contain spaces, but trailing whitespace will be trimmed.
 
-* `:check <on/off> <always/decls/off>`:
+* `:printTypes <both/decls/exprs/off>`:
 
-  * If the first argument is `on`,
-    then expressions will only be evaluated and definitions will only be added
-    only if typechecking succeeds.
+  Print to STDERR the inferred types of top-level declarations,
+  of expressions entered into the interpreters,
+  of both, or of neither.
 
-  * If the second argument is `always`, then inferred types will always be printed;
-    if it is `decls`, then only the inferred types of declarations will be printed;
-    otherwise, the type of expressions are never printed.'
-
-  * The default values are `on` `decls`.
+  This setting defaults to `off`.
 
 * `:trace <off/local/global>`:
 
