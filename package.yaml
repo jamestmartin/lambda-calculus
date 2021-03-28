@@ -41,6 +41,7 @@ default-extensions:
 - PatternSynonyms
 - ScopedTypeVariables
 - StandaloneDeriving
+- TupleSections
 - TypeFamilies
 - ViewPatterns
 

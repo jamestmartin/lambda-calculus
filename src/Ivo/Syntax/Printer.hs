@@ -1,4 +1,7 @@
-module Ivo.Syntax.Printer (unparseAST, unparseType, unparseScheme) where
+-- | Turn abstract syntax into the corresponding concrete syntax.
+--
+-- This is /not/ a pretty-printer; it uses minimal whitespace)
+module Ivo.Syntax.Printer (unparseScope, unparseTopLevel, unparseExpr) where
 
 import Ivo.Syntax.Base
 
@@ -9,6 +12,99 @@ import Data.Text qualified as T
 import Data.Text.Lazy (fromStrict, toStrict, intercalate, unwords, singleton)
 import Data.Text.Lazy.Builder (Builder, fromText, fromLazyText, toLazyText, fromString)
 import Prelude hiding (unwords)
+
+unparseScope :: Scope -> Text
+unparseScope = unambiguous . scope
+
+unparseTopLevel :: TopLevel -> Text
+unparseTopLevel = unambiguous . topLevel
+
+unparseExpr :: Expr -> Text
+unparseExpr = unambiguous . expr
+
+type Unparser a = a -> Tagged Builder
+
+scope :: Unparser Scope
+scope (Scope tls) = tag Ambiguous $ unmany (topLevel <? ";\n") tls
+
+(<?) :: Unparser a -> Text -> Unparser a
+u <? txt = \x -> u x <> fromText txt
+
+topLevel :: Unparser TopLevel
+topLevel = \case
+  Open pub expr use hide rename ->
+    publicOrPrivate pub <>
+    unambiguousExpr expr <> " " <>
+    openUsing use <> " "
+    openHiding hide <> " "
+    openRenaming rename
+  Define pub def ->
+    publicOrPrivate pub <>
+    definition def
+  TLData expr -> data_ expr
+  TLAxiom expr -> axiom expr
+  TLSig s -> sig s
+
+publicOrPrivate :: PublicOrPrivate -> Builder
+publicOrPrivate Public = "pub "
+publicOrPrivate Private = ""
+
+openUsing, openHiding :: [(Text, Maybe (Maybe [Text]))] -> Builder
+
+-- FIXME
+openUsing _ = "using (some stuff) "
+
+-- FIXME
+openHiding _ = "hiding (some stuff) "
+
+-- FIXME
+openRenaming :: [(Text, Text)]
+openRenaming _ = "renaming (some stuff) "
+
+definition :: Unparser Definition
+definition (Definition name ty expr) =
+  fromText name <> " " <> typeSig ty <> "= " <> unambiguousExpr expr
+
+expr :: Unparser Expr
+expr = \case
+  Data expr -> tag Block $ data_ expr
+  Axiom expr -> tag Block $ axiom expr
+  SigE s -> tag Block $ sig s
+  -- FIXME
+  Mod _ _ _ -> tag Block $ error "I don't know how to unparse modules"
+  Access expr name -> tag Ambiguous $ blockExpr expr <> "::" <> fromText name
+  Forall binders ty -> tag Block $ "∀ " <> typeBinders binders <> "→ " <> ambiguousExpr ty
+  Arrow [] arg ty -> tag Ambiguous $ blockExpr arg <> "→ " <> ambiguousExpr ty
+  Ann expr ty -> tag Ambiguous $ blockExpr expr <> ": " <> ambiguousExpr ty
+  Hole -> tag Finite "_"
+  TypeLam binders ty -> tag Block $ "Λ " <> typeBinders binders <> "→ " <> ambiguousExpr ty
+  TypeApp expr ty -> tag Ambiguous $ blockExpr <> "@" <> finiteExpr ty
+  Lam pats cases -> tag Block $ "λ " <> unmany1 pattern_ pats <> caseBranches cases
+
+data_ = undefined
+
+axiom = undefined
+
+typeBinders :: Unparser (NonEmpty (Either (NonEmpty Text, Kind) Text))
+typeBinders = error "Whatever"
+
+sig :: Unparser Sig
+sig = error "I don't know how to unparse signatures"
+
+pattern_ :: Unparser Pattern
+pattern_ = error "I don't know how to unparse patterns"
+
+caseBranch :: Unparser CaseBranch
+caseBranch = error "I don't know how to unparse case branches"
+
+caseBranches :: Unparser [CaseBranch]
+caseBranches = error "I don't know how to unparse case branches"
+
+guard :: Unparser Guard
+guard = error "I don't know how to unparse guard clauses"
+
+lit :: Unparser a -> Unparser (Lit a)
+lit u = error "I don't know how to unparse literals"
 
 -- I'm surprised this isn't in base somewhere.
 unsnoc :: NonEmpty a -> ([a], a)
@@ -47,78 +143,13 @@ ambiguous :: Tagged Builder -> Builder
 ambiguous (Finite, t) = t
 ambiguous (_, t) = group t
 
--- | Turn an abstract syntax tree into the corresponding concrete syntax.
---
--- This is *not* a pretty-printer; it uses minimal whitespace.
-unparseAST :: AST -> Text
-unparseAST = toStrict . toLazyText . snd . cata \case
-  VarF name -> tag Finite $ fromText name
-  AppF ef exs -> unparseApp ef exs
-  AbsF names body -> tag Block $
-    let names' = fromLazyText (unwords $ map fromStrict $ toList names)
-    in "λ" <> names' <> ". " <> unambiguous body
-  LetFP defs body -> tag Block $ "let " <> unparseDefs defs <> " in " <> unambiguous body
-  LetRecFP def body -> tag Block $ "letrec " <> unparseDef def <> " in " <> unambiguous body
-  CtrF ctr e -> unparseCtr ctr e
-  CaseF pats ->
-    let pats' = fromLazyText $ intercalate "; " $ map (toLazyText . unparsePat) pats
-    in tag Finite $ "{ " <> pats' <> " }"
-  AnnF () e t -> tag Ambiguous $ final e <> " : " <> fromText (unparseType t)
-  PNatF n -> tag Finite $ fromString $ show n
-  PListF es ->
-    let es' = fromLazyText $ intercalate ", " $ map (toLazyText . unambiguous) es
-    in tag Finite $ "[" <> es' <> "]"
-  PStrF s -> tag Finite $ "\"" <> fromText s <> "\""
-  PCharF c -> tag Finite $ "'" <> fromLazyText (singleton c)
-  HoleFP -> tag Finite "_"
-  where
-    unparseApp :: Tagged Builder -> NonEmpty (Tagged Builder) -> Tagged Builder
-    unparseApp ef (unsnoc -> (exs, efinal))
-      = tag Ambiguous $ foldr (\e es' -> ambiguous e <> " " <> es') (final efinal) (ef : exs)
+ambiguousExpr, blockExpr, finiteExpr :: Expr -> Builder
 
-    unparseDef (name, val) = fromText name <> " = " <> unambiguous val
-    unparseDefs defs = fromLazyText (intercalate "; " $ map (toLazyText . unparseDef) $ toList defs)
+ambiguousExpr = ambiguous . expr
 
-    unparseCtr :: Ctr -> [Tagged Builder] -> Tagged Builder
-    -- Fully-applied special syntax forms
-    unparseCtr CPair [x, y] = tag Finite $ "(" <> unambiguous x <>  ", "  <> unambiguous y <> ")"
-    unparseCtr CCons [x, y] = tag Finite $ "(" <> unambiguous x <> " :: " <> unambiguous y <> ")"
-    -- Partially-applied syntax forms
-    unparseCtr CUnit  [] = tag Finite "()"
-    unparseCtr CPair  [] = tag Finite "(,)"
-    unparseCtr CLeft  [] = tag Finite "Left"
-    unparseCtr CRight [] = tag Finite "Right"
-    unparseCtr CZero  [] = tag Finite "Z"
-    unparseCtr CSucc  [] = tag Finite "S"
-    unparseCtr CNil   [] = tag Finite "[]"
-    unparseCtr CCons  [] = tag Finite "(::)"
-    unparseCtr CChar  [] = tag Finite "Char"
-    unparseCtr ctr (x:xs) = unparseApp (unparseCtr ctr []) (x :| xs)
+blockExpr = final . expr
 
-    unparsePat (Pat ctr ns e)
-      = unambiguous (unparseCtr ctr (map (tag Finite . fromText) ns)) <> " -> " <> unambiguous e
+finiteExpr = unambiguous . expr
 
--- HACK
-pattern TApp2 :: Type -> Type -> Type -> Type
-pattern TApp2 tf tx ty = TApp (TApp tf tx) ty
-
--- TODO: Improve these printers.
-unparseType :: Type -> Text
-unparseType (TVar name) = name
-unparseType (TApp2 TAbs a b) = "(" <> unparseType a <> " -> " <> unparseType b <> ")"
-unparseType (TApp2 TProd a b) = "(" <> unparseType a <> " * " <> unparseType b <> ")"
-unparseType (TApp2 TSum a b) = "(" <> unparseType a <> " + " <> unparseType b <> ")"
-unparseType (TApp TList a) = "[" <> unparseType a <> "]"
-unparseType (TApp a b) = "(" <> unparseType a <> " " <> unparseType b <> ")"
-unparseType TAbs = "(->)"
-unparseType TProd = "(*)"
-unparseType TSum = "(+)"
-unparseType TUnit = "★"
-unparseType TVoid = "⊥"
-unparseType TNat = "Nat"
-unparseType TList = "[]"
-unparseType TChar = "Char"
-
-unparseScheme :: Scheme -> Text
-unparseScheme (TForall [] t) = unparseType t
-unparseScheme (TForall names t) = "∀" <> T.unwords names <>  ". " <> unparseType t
+unmany :: Foldable t => Unparser a -> t a -> Builder
+unmany u xs = error "fuck it, implement this later"
