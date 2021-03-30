@@ -266,6 +266,7 @@ exTypeApp = label "type application" $ try do
 
 -- | 'Lam' with only one undelimited case branch
 exBlockLam = label "λ expression" $ try do
+  tkLam
   args <- many pattern_
   tkArr
   body <- ambiguous
@@ -273,6 +274,7 @@ exBlockLam = label "λ expression" $ try do
 
 -- | 'Lam' with delimited case branches
 exFiniteLam = label "λ-case expression" $ try do
+  tkLam
   simpleArgs <- many pattern_
   body <- caseBranches
   pure $ Lam simpleArgs body

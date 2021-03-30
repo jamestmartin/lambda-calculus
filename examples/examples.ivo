@@ -1,26 +1,173 @@
 #!/usr/bin/env -S ivo -c
+
+// syntax for algebraic data types
+type ℕ
+    + 0
+    + 1+ ℕ
+
+type List a
+    + []
+    + _∷_ a (List a)
+
+// syntax for algebraic codata types
+type Stream a
+    & Head a
+    & Tail (Stream a)
+
+// syntax for generalized algebraic (co)data types
+type Vec a : ℕ → Type
+    []  :                     Vec a     0
+    _∷_ : ∀ n → a → Vec a n → Vec a (1+ n)
+
+// syntax for mutually-recursive types
+types
+    Even Odd : ℕ → Type
+
+    0even  : Even 0
+    1+odd  : ∀ n → Odd  n → Even (1+ n)
+    1+even : ∀ n → Even n → Odd  (1+ n)
+
+// syntax for higher-inductive type
+type Multiset a
+    empty     :                           Multiset a
+    singleton :                       a → Multiset a
+    append    : Multiset a → Multiset a → Multiset a
+
+    append_commutative : (x y : Multiset a) → append x y ≡ append y x
+
+// syntax for inductive-recursive types? (needs work)
+types a _#_
+    DList : Type
+    Fresh : a → Dlist a → Type
+
+    []    :                                                   DList a
+    _∷_#_ : (head : a) → (tail : DList a) → Fresh head tail → DList a
+
+    fresh[] : (x : a) → Fresh x []
+    fresh∷  : (x : a) → (head : a) → (tail : DList a) → (p : Fresh head tail) → x # head → Fresh x tail → Fresh x (head ∷ tail # p)
+
+// syntax for traits
+trait Functor f
+    map : ∀ a b → (a → b) → f a → f b
+
+// short for `open data type List a`
+// short for `open implicit trait Functor f`
+
+// generated signatures
+sig
+    ℕ      : Type
+    ℕ_Sig  : Sig
+    ℕ_Impl : ℕ_Sig
+
+    0  :     ℕ
+    1+ : ℕ → ℕ
+
+    pattern  0 1+
+    complete 0 1+
+
+    ℕ_rec : ∀ a             ⇒ a   → (      a →   a       ) →      ℕ  → a
+    ℕ_ind :  (C : ℕ → Type) ⇒ C 0 → (∀ n → C n → C (1+ n)) → (n : ℕ) → C n
+
+recurse : Sig → ...
+induct  : Sig → ...
+baseFunctor : Sig → Sig
+
+sig
+    Functor : Type → Sig
+
+    map : ∀ f ⇒ Functor f ⇒ ∀ a b ⇒ (a → b) → f a → f b
+
+
+inductive type
+
+type List a
+    + []
+    + _:+_ a (List a)
+
+type Stream a
+    & Head a
+    & Tail (Stream a)
+
+type Vec a : ℕ → Type
+   []   : Vec a 0
+   _:+_ : ∀ n → a → Vec a n → Vec a (1+ n)
+
+sig
+    ℕ : Type
+    Z : ℕ
+    S : ℕ → ℕ
+
+sig
+    List : Type → Type
+    []   : ∀ a              → List a
+    _:+_ : ∀ a → a → List a → List a
+
+sig
+    Stream : Type → Type
+    Head : ∀ a → Stream a → a
+    Tail : ∀ a → Stream a → Stream a
+
+iterate : ∀ a → (a → a) → a → ℕ → a
+iterate f x
+    0    → []
+    1+ n → x :+ iterate f (f x) n
+
+iterate = \ f x n → case n {
+    0    → [];
+    1+ n → x :+ iterate f (f x) n;
+};
+
+iterate f x = \case
+    0 -> []
+    1+ n -> x : iterate f (f x) n
+
+append : ∀ a → List a → List a → List a
+append xs ys = case xs
+    []      → ys
+    x :+ xs → x :+ append xs ys
+
+reverse : ∀ a → List a → List a
+reverse
+    []      → []
+    x :+ xs → append (reverse xs) [ x ]
+
+churchℕ : Type
+churchℕ = ∀ a → (a → a) → a → a
+
+churchS : churchℕ → churchℕ
+churchS n f x = f (n f x)
+
+church+ : churchℕ → churchℕ → churchℕ
+church+ n = n churchS
+
 // Create a list by iterating `f` `n` times:
-letrec iterate = \f x.
-    { Z   -> []
-    ; S n -> (x :: iterate f (f x) n)
-    };
+iterate = λ f x {
+    Z    → [];
+    1+ n → x  :+ iterate f (f x) n;
+};
 
 // Use the iterate function to count to 10:
-let countToTen : [Nat] =
-  let countTo = iterate S 1
+countToTen : [Nat] =
+  let countTo = iterate +1 1
   in countTo 10;
 
 // Append two lists together:
-letrec append = \xs ys.
-    { []        -> ys
-    ; (x :: xs) -> (x :: append xs ys)
-    } xs;
+append = λ xs ys → case xs {
+    []      → ys;
+    x :+ xs → x :+ append xs ys;
+};
 
 // Reverse a list:
-letrec reverse =
-    { []         -> []
-    ; (x :: xs)  -> append (reverse xs) [x]
-    };
+reverse = λ {
+    [] → [];
+    _:+_ x xs → append (reverse xs) [ x ]
+};
+
+// Basic operations on church-encoded naturals.
+churchS = λ n f x → f (n f x);
+church+ = λ n → n churchS;
+
+main =
 
 // Now we can reverse `"reverse"`:
 let reverseReverse : [Char] = reverse "reverse";
