@@ -59,8 +59,8 @@ The parser's error messages currently are virtually useless, so be very careful 
 * Function application: `f x y`
 * Lambda abstraction: `\x y z. E` or `λx y z. E`
 * Let expressions: `let x = E; y = F in G`
-  * Or letrec expressions, which can only define variable,
-    but which can be self-referential: `letrec x = ... x ... in E`
+  * The definitions of let expessions may be recursive:
+    `let undefined = undefined in undefined`.
 * Parenthetical expressions: `(E)`
 * Constructors: `()`, `(x, y)` (or `(,) x y`), `Left x`, `Right y`, `Z`, `S`, `[]`, `(x :: xs)` (or `(:) x xs`), `Char n`.
   * The parentheses around the cons constructor are not optional.
@@ -76,7 +76,7 @@ The parser's error messages currently are virtually useless, so be very careful 
 * Comments: `// line comment`, `/* block comment */`
 
 Top-level contexts (e.g. the REPL or a source code file)
-allow declarations (`let(rec) x = E` without multiple definitions `in ...`),
+allow declarations (`let x = E` without multiple definitions `in ...`),
 which make your definitions available for the rest of the program's execution.
 You must separate your declarations and expressions with `;`.
 

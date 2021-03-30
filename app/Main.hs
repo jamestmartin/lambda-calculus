@@ -81,15 +81,15 @@ runProgram program = do
   runDeclOrExpr (Right (Var "main"))
 
 loadFile :: ProgramAST -> AppM ()
-loadFile = mapM_ (\(name, ty, e) -> define name ty $ ast2check e)
+loadFile = mapM_ (\(name, ty, e) -> define name ty $ decl2check name e)
 
 runTopLevel :: TopLevelAST -> AppM ()
 runTopLevel = mapM_ runDeclOrExpr
 
 runDeclOrExpr :: Either Declaration AST -> AppM ()
-runDeclOrExpr (Left (name, ty, exprAST)) = do
+runDeclOrExpr (Left (name, ty, body)) = do
   defs <- gets definitions
-  let expr = substitute defs $ ast2check exprAST
+  let expr = substitute defs $ decl2check name body
   _ <- typecheckDecl ty name expr
   define name ty expr
 runDeclOrExpr (Right exprAST) = do

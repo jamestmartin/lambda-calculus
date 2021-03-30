@@ -1,9 +1,9 @@
 module Ivo.Syntax.Base
   ( Expr (..), ExprF (..), Ctr (..), Pat, Def, DefF (..), PatF (..), VoidF, Text, NonEmpty (..)
   , Type (..), TypeF (..), Scheme (..), tapp
-  , substitute, substitute1, rename, rename1, free, bound, used
+  , substitute, substitute1, rename, rename1, free, freeIn, bound, used
   , Parse, AST, ASTF, ASTX, ASTXF (..), NonEmptyDefFs (..)
-  , pattern LetFP, pattern LetRecP, pattern LetRecFP
+  , pattern LetFP
   , pattern PNat, pattern PNatF, pattern PList, pattern PListF, pattern PChar, pattern PCharF
   , pattern PStr, pattern PStrF, pattern HoleP, pattern HoleFP
   , simplify
@@ -11,7 +11,8 @@ module Ivo.Syntax.Base
 
 import Ivo.Expression.Base
 
-import Data.Functor.Foldable (embed, project)
+import Data.Foldable (fold)
+import Data.Functor.Foldable (embed, project, cata)
 import Data.List.NonEmpty (NonEmpty (..), toList)
 import Data.Text qualified as T
 
@@ -49,10 +50,8 @@ type instance CtrArgsF Parse = []
 type instance XExprF   Parse = ASTXF
 
 data ASTXF r
-  -- | A let expression where the definitions may reference each other recursively.
-  = LetRecP_ !(Text, r) !r
   -- | A natural number literal, e.g. `10`.
-  | PNat_ Int
+  = PNat_ Int
   -- | A list literal, e.g. `[x, y, z]`.
   | PList_ [r]
   -- | A character literal, e.g. `'a`.
@@ -72,12 +71,6 @@ newtype NonEmptyDefFs r = NonEmptyDefFs { getNonEmptyDefFs :: NonEmpty (Text, r)
 
 pattern LetFP :: NonEmpty (Text, r) -> r -> ASTF r
 pattern LetFP ds e = LetF (NonEmptyDefFs ds) e
-
-pattern LetRecP :: (Text, AST) -> AST -> AST
-pattern LetRecP d e = ExprX (LetRecP_ d e)
-
-pattern LetRecFP :: (Text, r) -> r -> ASTF r
-pattern LetRecFP d e = ExprXF (LetRecP_ d e)
 
 pattern PNat :: Int -> AST
 pattern PNat n = ExprX (PNat_ n)
@@ -110,11 +103,26 @@ pattern HoleFP :: ASTF r
 pattern HoleFP = ExprXF HoleP_
 
 {-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, AnnF, ExprXF                               #-}
-{-# COMPLETE Var,  App,  Abs,  Let,   Ctr,  Case,  Ann,  LetRecP,  PNat,  PList,  PChar,  PStr,  HoleP  #-}
-{-# COMPLETE VarF, AppF, AbsF, LetF , CtrF, CaseF, AnnF, LetRecFP, PNatF, PListF, PCharF, PStrF, HoleFP #-}
-{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, AnnF, LetRecFP, PNatF, PListF, PCharF, PStrF, HoleFP #-}
+{-# COMPLETE Var,  App,  Abs,  Let,   Ctr,  Case,  Ann,  PNat,  PList,  PChar,  PStr,  HoleP  #-}
+{-# COMPLETE VarF, AppF, AbsF, LetF , CtrF, CaseF, AnnF, PNatF, PListF, PCharF, PStrF, HoleFP #-}
+{-# COMPLETE VarF, AppF, AbsF, LetFP, CtrF, CaseF, AnnF, PNatF, PListF, PCharF, PStrF, HoleFP #-}
 
--- TODO: Implement Substitutable for AST.
+instance Substitutable AST where
+  collectVars withVar withBinder = cata \case
+    VarF name -> withVar name
+    AbsF names body -> compose (fmap withBinder names) body
+    LetFP defs body ->
+      composeMap (\(name, def) body' ->
+                    withBinder name def <> withBinder name body'
+                 ) defs body
+    CaseF pats -> foldMap (\(Pat _ ns e) -> foldr withBinder e ns) pats
+    e -> fold e
+
+  -- TODO
+  rename = error "rename not yet implemented for AST"
+
+  -- TODO
+  unsafeSubstitute = error "unsafeSubstitute not yet implemented for AST"
 
 -- | Combine nested expressions into compound expressions or literals when possible.
 simplify :: AST -> AST

@@ -1,6 +1,6 @@
 #!/usr/bin/env -S ivo -c
 // Create a list by iterating `f` `n` times:
-letrec iterate = \f x.
+let iterate = \f x.
     { Z   -> []
     ; S n -> (x :: iterate f (f x) n)
     };
@@ -11,13 +11,13 @@ let countToTen : [Nat] =
   in countTo 10;
 
 // Append two lists together:
-letrec append = \xs ys.
+let append = \xs ys.
     { []        -> ys
     ; (x :: xs) -> (x :: append xs ys)
     } xs;
 
 // Reverse a list:
-letrec reverse =
+let reverse =
     { []         -> []
     ; (x :: xs)  -> append (reverse xs) [x]
     };
@@ -31,7 +31,7 @@ let threePlusTwo : Nat =
     ; plus = \x. x Sf
   in plus (\f x. f (f (f x))) (\f x. f (f x)) S Z;
 
-letrec undefined = undefined;
+let undefined = undefined;
 
 // This expression would loop forever, but `callcc` saves the day!
 let callccSaves : Nat = S (callcc \k. undefined (k Z));

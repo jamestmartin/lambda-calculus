@@ -8,9 +8,10 @@ module Ivo.Expression.Base
   , Type (..), TypeF (..), Scheme (..), tapp
   , RecursivePhase, projectAppArgs, projectLetArgs, projectCtrArgs, projectXExpr, projectDef
   , embedAppArgs, embedLetArgs, embedCtrArgs, embedXExpr, embedDef
-  , Substitutable, free, bound, used, collectVars, rename, rename1
+  , Substitutable, free, freeIn, bound, used, collectVars, rename, rename1
   , substitute, substitute1, unsafeSubstitute, unsafeSubstitute1
   , runRenamer, freshVar, replaceNames, runSubstituter, maySubstitute
+  , compose, composeMap
   ) where
 
 import Control.Monad.Reader (MonadReader, Reader, runReader, asks, local)
@@ -307,6 +308,10 @@ class Substitutable e where
   free :: e -> HashSet Text
   free = collectVars HS.singleton HS.delete
 
+  -- | Is the given name a member of the expression's free variables?
+  freeIn :: Text -> e -> Bool
+  freeIn name = HS.member name . free
+
   -- | Bound variables are variables which are abstracted over anywhere in an expression.
   bound :: e -> HashSet Text
   bound = collectVars (const HS.empty) HS.insert
@@ -430,11 +435,14 @@ maySubstitute :: ( MonadReader (HashMap Text b) m
                  )
               => t Text -> (a, m a) -> m a
 maySubstitute ns (unmodified, substituted) =
-  local (compose $ fmap HM.delete ns) do
+  local (composeMap HM.delete ns) do
     noMoreSubsts <- asks HM.null
     if noMoreSubsts
       then pure unmodified
       else substituted
 
-compose :: Foldable t => t (a -> a) -> a -> a
+compose :: Foldable t => t (a -> a) -> (a -> a)
 compose = foldr (.) id
+
+composeMap :: (Functor t, Foldable t) => (a -> (b -> b)) -> t a -> (b -> b)
+composeMap f = compose . fmap f

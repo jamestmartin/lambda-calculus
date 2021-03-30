@@ -58,7 +58,6 @@ unparseAST = toStrict . toLazyText . snd . cata \case
     let names' = fromLazyText (unwords $ map fromStrict $ toList names)
     in "λ" <> names' <> ". " <> unambiguous body
   LetFP defs body -> tag Block $ "let " <> unparseDefs defs <> " in " <> unambiguous body
-  LetRecFP def body -> tag Block $ "letrec " <> unparseDef def <> " in " <> unambiguous body
   CtrF ctr e -> unparseCtr ctr e
   CaseF pats ->
     let pats' = fromLazyText $ intercalate "; " $ map (toLazyText . unparsePat) pats

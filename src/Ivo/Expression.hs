@@ -1,7 +1,7 @@
 module Ivo.Expression
   ( Expr (..), Ctr (..), Pat, ExprF (..), PatF (..), DefF (..), VoidF, UnitF (..), Text
   , Type (..), TypeF (..), Scheme (..), tapp
-  , substitute, substitute1, rename, free, bound, used
+  , substitute, substitute1, rename, free, freeIn, bound, used
   , Eval, EvalExpr, EvalX, EvalXF (..), Identity (..)
   , pattern AppFE, pattern CtrE, pattern CtrFE,
     pattern ContE, pattern ContFE, pattern CallCCE, pattern CallCCFE
@@ -11,7 +11,7 @@ module Ivo.Expression
   , Check, CheckExpr, CheckExprF, CheckX, CheckXF (..)
   , pattern AppFC, pattern CtrC, pattern CtrFC, pattern CallCCC, pattern CallCCFC
   , pattern FixC, pattern FixFC, pattern HoleC, pattern HoleFC
-  , ast2check, ast2eval, check2eval, check2ast, eval2ast
+  , ast2check, decl2check, ast2eval, check2eval, check2ast, eval2ast
   , builtins
   ) where
 
@@ -36,9 +36,18 @@ ast2check = substitute builtins . cata \case
   AppF ef exs -> foldl' App ef $ toList exs
   AbsF ns e -> foldr Abs e $ toList ns
   LetF ds e ->
-    let letExpr name val body' = App (Abs name body') val
+    let
+      letExpr, letPlainExpr, letRecExpr
+        :: Text -> CheckExpr -> CheckExpr -> CheckExpr
+      -- | A let expression binding a non-recursive value.
+      letPlainExpr name val body' = App (Abs name body') val
+      -- | A let expression binding a recursive value.
+      letRecExpr name val body' = letExpr name (App FixC $ Abs name val) body'
+      -- | Choose whether or not the let expression needs to be recursive.
+      letExpr name val body'
+        | name `freeIn` val = letRecExpr name val body'
+        | otherwise         = letPlainExpr name val body'
     in foldr (uncurry letExpr) e $ getNonEmptyDefFs ds
-  LetRecFP (nx, ex) e -> App (Abs nx e) (App FixC (Abs nx ex))
   CtrF ctr es -> foldl' App (CtrC ctr) es
   CaseF ps -> Case ps
   AnnF () e t -> Ann () e t
@@ -54,6 +63,13 @@ ast2check = substitute builtins . cata \case
 
     mkList :: [CheckExpr] -> CheckExpr
     mkList = foldr (App . App (CtrC CCons)) (CtrC CNil)
+
+-- | Convert from declaration abstract syntax to a typechecker expression.
+decl2check :: Text -> AST -> CheckExpr
+decl2check name ast
+  | name `freeIn` ast = App FixC $ Abs name expr
+  | otherwise         = expr
+  where expr = ast2check ast
 
 -- | Convert from a typechecker expression to an evaluator expression.
 check2eval :: CheckExpr -> EvalExpr
