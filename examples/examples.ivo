@@ -1,47 +1,52 @@
 #!/usr/bin/env -S ivo -c
-// Create a list by iterating `f` `n` times:
-let iterate = \f x.
+;; Create a list by iterating `f` `n` times:
+iterate = \f x.
     { Z   -> []
     ; S n -> (x :: iterate f (f x) n)
     };
 
-// Use the iterate function to count to 10:
-let countToTen : [Nat] =
+;; Use the iterate function to count to 10:
+countToTen : [Nat];
+countToTen =
   let countTo = iterate S 1
   in countTo 10;
 
-// Append two lists together:
-let append = \xs ys.
+;; Append two lists together:
+append = \xs ys.
     { []        -> ys
     ; (x :: xs) -> (x :: append xs ys)
     } xs;
 
-// Reverse a list:
-let reverse =
+;; Reverse a list:
+reverse =
     { []         -> []
     ; (x :: xs)  -> append (reverse xs) [x]
     };
 
-// Now we can reverse `"reverse"`:
-let reverseReverse : [Char] = reverse "reverse";
+;; Now we can reverse `"reverse"`:
+reverseReverse : [Char];
+reverseReverse = reverse "reverse";
 
-// Calculating `3 + 2` with the help of Church-encoded numerals:
-let threePlusTwo : Nat =
+;; Calculating `3 + 2` with the help of Church-encoded numerals:
+threePlusTwo : Nat;
+threePlusTwo =
   let Sf   = \n f x. f (n f x)
     ; plus = \x. x Sf
   in plus (\f x. f (f (f x))) (\f x. f (f x)) S Z;
 
-let undefined = undefined;
+undefined = undefined;
 
-// This expression would loop forever, but `callcc` saves the day!
-let callccSaves : Nat = S (callcc \k. undefined (k Z));
+;; This expression would loop forever, but `callcc` saves the day!
+callccSaves : Nat;
+callccSaves = S (callcc \k. undefined (k Z));
 
-// And if it wasn't clear, this is what the `Char` constructor does:
-let charB : Char = { Char c -> Char (S c) } 'a;
-// (it outputs `'b`)
+;; And if it wasn't clear, this is what the `Char` constructor does:
+charB : Char;
+charB = { Char c -> Char (S c) } 'a;
+;; (it outputs `'b`)
 
-// pack all of the examples into tuples so the main function can print them
-let main =
+;; pack all of the examples into tuples so the main function can print them
+main =
   ( countToTen
   , ( reverseReverse
     , ( callccSaves

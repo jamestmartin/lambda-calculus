@@ -16,7 +16,7 @@ module Ivo.Expression
   ) where
 
 import Ivo.Evaluator.Base
-import Ivo.Syntax.Base
+import Ivo.Syntax.Base qualified as S
 import Ivo.Types.Base
 
 import Data.Functor.Foldable (cata, hoist)
@@ -30,12 +30,12 @@ builtins :: HashMap Text CheckExpr
 builtins = HM.fromList [("callcc", CallCCC)]
 
 -- | Convert from an abstract syntax tree to a typechecker expression.
-ast2check :: AST -> CheckExpr
-ast2check = substitute builtins . cata \case
+ast2check :: S.Expr Text -> Either Text CheckExpr
+ast2check = fmap (substitute builtins) . cata \case
   VarF name -> Var name
-  AppF ef exs -> foldl' App ef $ toList exs
-  AbsF ns e -> foldr Abs e $ toList ns
-  LetF ds e ->
+  AppF ef exs -> fmap (foldl' App ef) $ sequenceA $ toList exs
+  AbsF ns e -> fmap (foldr Abs e) $ sequenceA $ toList ns
+  LetF scope e ->
     let
       letExpr, letPlainExpr, letRecExpr
         :: Text -> CheckExpr -> CheckExpr -> CheckExpr
@@ -47,7 +47,7 @@ ast2check = substitute builtins . cata \case
       letExpr name val body'
         | name `freeIn` val = letRecExpr name val body'
         | otherwise         = letPlainExpr name val body'
-    in foldr (uncurry letExpr) e $ getNonEmptyDefFs ds
+    in fmap (foldr letExpr e) $ solveScope scope
   CtrF ctr es -> foldl' App (CtrC ctr) es
   CaseF ps -> Case ps
   AnnF () e t -> Ann () e t
@@ -63,6 +63,9 @@ ast2check = substitute builtins . cata \case
 
     mkList :: [CheckExpr] -> CheckExpr
     mkList = foldr (App . App (CtrC CCons)) (CtrC CNil)
+
+solveScope :: ScopeF CheckExpr -> Either Text [(Text, Maybe Type, CheckExpr)]
+solveScope (ScopeF items) = _
 
 -- | Convert from declaration abstract syntax to a typechecker expression.
 decl2check :: Text -> AST -> CheckExpr
@@ -110,6 +113,10 @@ check2ast = hoist go . rename (HM.keysSet builtins)
       CallCCFC-> VarF "callcc"
       FixFC -> VarF "fix"
       HoleFC -> HoleFP
+
+-- | Convert from a type to an abstract syntax tree.
+type2ast :: Type -> S.Expr Text
+type2ast = _
 
 -- | Convert from an evaluator expression to an abstract syntax tree.
 eval2ast :: EvalExpr -> AST

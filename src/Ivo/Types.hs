@@ -79,8 +79,9 @@ j (Abs n_arg e_ret) = do
   t_arg <- fresh
   t_ret <- bindVar n_arg t_arg $ j e_ret
   pure $ tapp [TAbs, t_arg, t_ret]
-j (Let (n_x, e_x) e_ret) = do
+j (LetC n_x t_ann_x e_x e_ret) = do
   (t_x_mono, c) <- listen $ j e_x
+  mapM_ (unify t_x_mono) t_ann_x
   s <- solve' c
   t_x_poly <- generalize $ substitute s t_x_mono
   local (HM.insert n_x t_x_poly) $ j e_ret
